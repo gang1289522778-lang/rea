@@ -3441,13 +3441,17 @@ public final class ReaGhidraBridge extends HeadlessScript {
      * The canonical empty string is a small literal with a zero count.
      */
     private SwiftStringLiteralDecode swiftStringLiterals(Function function) throws Exception {
+        return swiftStringLiterals(function, new SwiftLiteralBudget());
+    }
+
+    // The budget is owned by one decode run; an explicit budget also permits deterministic producer regressions.
+    private SwiftStringLiteralDecode swiftStringLiterals(Function function, SwiftLiteralBudget budget) throws Exception {
         Register[] registers = new Register[31];
         for (int index = 0; index < registers.length; index++) {
             registers[index] = currentProgram.getRegister("x" + index);
         }
         TreeMap<String, JsonObject> observed = new TreeMap<>();
         TreeMap<String, JsonObject> omitted = new TreeMap<>();
-        SwiftLiteralBudget budget = new SwiftLiteralBudget();
         Map<String, Boolean> selectedValues = new HashMap<>();
         SymbolicPropogator propagator = new SymbolicPropogator(currentProgram, false);
         propagator.flowConstants(function.getEntryPoint(), function.getBody(), new ContextEvaluatorAdapter() {
@@ -3690,6 +3694,11 @@ public final class ReaGhidraBridge extends HeadlessScript {
         SwiftLiteralBudget() {
             Runtime runtime = Runtime.getRuntime();
             remaining = Math.max(0, (runtime.maxMemory() - runtime.totalMemory() + runtime.freeMemory()) / 2);
+        }
+
+        SwiftLiteralBudget(long remaining) {
+            if (remaining < 0) throw new IllegalArgumentException("Swift literal budget must be nonnegative");
+            this.remaining = remaining;
         }
 
         boolean takeState() {

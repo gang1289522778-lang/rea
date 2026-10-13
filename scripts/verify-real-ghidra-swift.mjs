@@ -1,7 +1,14 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { copyFile, mkdir, mkdtemp, rm } from "node:fs/promises";
+import {
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -50,6 +57,10 @@ const literalSource = fileURLToPath(
 );
 const binary = join(root, "swift-inventory");
 const literalBinary = join(root, "swift-literals");
+const literalAssembly = fileURLToPath(
+  new URL("../tests/conformance/swift/decoder-safeguards.S", import.meta.url),
+);
+const literalObject = join(root, "decoder-safeguards.o");
 const reports = [];
 let literalReport;
 try {
@@ -59,6 +70,19 @@ try {
   await mkdir(join(root, "copied"));
   const copied = join(root, "copied", "swift-inventory");
   await copyFile(binary, copied);
+  await execute(
+    "xcrun",
+    [
+      "clang",
+      "-target",
+      "arm64-apple-macosx13.0",
+      "-c",
+      literalAssembly,
+      "-o",
+      literalObject,
+    ],
+    { timeout: 60_000 },
+  );
   // Decoding covers AArch64 register pairs, so build that slice on any Mac host.
   await execute(
     "swiftc",
@@ -67,11 +91,13 @@ try {
       "-target",
       "arm64-apple-macosx13.0",
       literalSource,
+      literalObject,
       "-o",
       literalBinary,
     ],
     { timeout: 60_000 },
   );
+  await verifyDecoderSafeguards();
   await client.connect(transport);
   for (const [variant, path] of [
     ["debug", binary],
@@ -226,4 +252,55 @@ async function verifyStringLiterals() {
   } finally {
     await call("close_binary", {});
   }
+}
+
+// Exercise the actual Java producer inside a disposable Ghidra database. The
+// explicit private budget boundary makes exhaustion deterministic, without a
+// production CLI/MCP option or dependence on the verification host's free heap.
+async function verifyDecoderSafeguards() {
+  const scripts = join(root, "decoder-scripts");
+  await mkdir(scripts);
+  const bridgeSources = fileURLToPath(
+    new URL("../bridge/ghidra/", import.meta.url),
+  );
+  for (const name of await readdir(bridgeSources)) {
+    if (name.endsWith(".java"))
+      await copyFile(join(bridgeSources, name), join(scripts, name));
+  }
+  await copyFile(
+    fileURLToPath(
+      new URL(
+        "../tests/conformance/swift/ReaSwiftDecoderRegressions.java",
+        import.meta.url,
+      ),
+    ),
+    join(scripts, "ReaSwiftDecoderRegressions.java"),
+  );
+  const report = join(root, "decoder-safeguards.txt");
+  await execute(
+    installation.analyzeHeadlessPath,
+    [
+      root,
+      "decoder-regressions",
+      "-import",
+      literalBinary,
+      "-scriptPath",
+      scripts,
+      "-postScript",
+      "ReaSwiftDecoderRegressions.java",
+      report,
+      "-deleteProject",
+      "-max-cpu",
+      "2",
+    ],
+    {
+      env: { ...process.env, JAVA_HOME: installation.javaHome },
+      timeout: 120_000,
+      maxBuffer: 8 * 1024 * 1024,
+    },
+  );
+  assert.equal(
+    await readFile(report, "utf8"),
+    "REA_SWIFT_DECODER_SAFEGUARDS_OK\n",
+  );
 }
