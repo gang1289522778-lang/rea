@@ -359,6 +359,7 @@ const installationState = (
 
 /** Optional outer-adapter diagnostics composed without reversing dependencies. */
 export interface SystemDoctorHostOptions {
+  readonly workspaceDirectory?: string;
   readonly platform?: NodeJS.Platform;
   readonly architecture?: NodeJS.Architecture;
   readonly environment?: NodeJS.ProcessEnv;
@@ -528,6 +529,9 @@ export const systemDoctorHost = (
         platform,
         environment,
         resources,
+        ...(options.workspaceDirectory === undefined
+          ? {}
+          : { workspaceDirectory: options.workspaceDirectory }),
       }),
   };
 };

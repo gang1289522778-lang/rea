@@ -33,6 +33,9 @@ import type { ArtifactResourceScope } from "../artifacts/ArtifactResourceScope.j
 interface ClientRegistrationStatusBase {
   readonly client: string;
   readonly config_path: string;
+  readonly registration_scope?: "user" | "local";
+  readonly project_directory?: string;
+  readonly requested_project_directory?: string;
 }
 
 type RegistrationCommand = readonly [string, ...string[]];
@@ -79,6 +82,8 @@ interface ClientRegistrationReadOptions {
   readonly platform?: NodeJS.Platform;
   readonly environment?: NodeJS.ProcessEnv;
   readonly resources?: ArtifactResourceScope;
+  /** Explicit diagnostic scope; maintenance continues to inspect user registrations. */
+  readonly workspaceDirectory?: string;
 }
 
 /** Registration facts shared by diagnostics and update maintenance. */
@@ -110,6 +115,12 @@ export const readClientRegistrationInspections = async (
   ): void => {
     inspections.push({ status, activation });
   };
+  let claudeScope:
+    | Pick<
+        ClientRegistrationStatusBase,
+        "registration_scope" | "project_directory"
+      >
+    | undefined;
   for (const client of supportedClients(
     home,
     options.platform,
@@ -142,6 +153,12 @@ export const readClientRegistrationInspections = async (
       const files = await readClientConfigurationFiles(
         client,
         options.resources,
+        options.workspaceDirectory === undefined
+          ? {}
+          : {
+              workspaceDirectory: options.workspaceDirectory,
+              platform: options.platform ?? process.platform,
+            },
       );
       if (!files.ok) {
         record({
@@ -150,6 +167,18 @@ export const readClientRegistrationInspections = async (
           command: [],
           state: "invalid",
           remediation: files.error.detail,
+          ...(files.error.requested_project_directory === undefined
+            ? {}
+            : {
+                requested_project_directory:
+                  files.error.requested_project_directory,
+              }),
+          ...(files.error.registration_scope === undefined
+            ? {}
+            : { registration_scope: files.error.registration_scope }),
+          ...(files.error.project_directory === undefined
+            ? {}
+            : { project_directory: files.error.project_directory }),
         });
         continue;
       }
@@ -157,6 +186,24 @@ export const readClientRegistrationInspections = async (
       if (parsed === undefined) {
         record(unavailableStatus(client.name, client.configPath, "missing"));
         continue;
+      }
+      if (
+        client.name === "claude_code" &&
+        options.workspaceDirectory !== undefined
+      ) {
+        const local = parsed.serversPath[0] === "projects";
+        claudeScope = local
+          ? {
+              registration_scope: "local",
+              project_directory:
+                parsed.serversPath[1] ?? resolve(options.workspaceDirectory),
+            }
+          : {
+              registration_scope: "user",
+              ...(parsed.diagnosticProjectDirectory === undefined
+                ? {}
+                : { project_directory: parsed.diagnosticProjectDirectory }),
+            };
       }
       const policy = await readClientPolicyBlock(
         client,
@@ -216,7 +263,10 @@ export const readClientRegistrationInspections = async (
             policyBlock === undefined
             ? "aligned"
             : "stale",
-          policyBlock,
+          policyBlock ??
+            (client.name === "claude_code" && activation === "disabled"
+              ? "REA is disabled for this Claude Code project. Re-enable it in /mcp, then rerun doctor."
+              : undefined),
         ),
         activation,
       );
@@ -230,9 +280,29 @@ export const readClientRegistrationInspections = async (
       );
     }
   }
-  return inspections.sort((left, right) =>
-    compareUnicodeCodePoints(left.status.client, right.status.client),
-  );
+  return inspections
+    .map((inspection): ClientRegistrationInspection => {
+      const { status } = inspection;
+      const scope = status.client === "claude_code" ? claudeScope : undefined;
+      if (
+        scope?.registration_scope === "local" &&
+        status.state !== "aligned" &&
+        status.remediation === remediation
+      )
+        return {
+          ...inspection,
+          status: {
+            ...status,
+            ...scope,
+            remediation:
+              "Run rea setup --client claude_code --scope local --project DIRECTORY using the reported project_directory, then restart the client.",
+          },
+        };
+      return { ...inspection, status: { ...status, ...scope } };
+    })
+    .sort((left, right) =>
+      compareUnicodeCodePoints(left.status.client, right.status.client),
+    );
 };
 
 const registrationActivation = (
@@ -344,7 +414,9 @@ const parseRegistration = (
   if (client.format === "commandcode" && registration.transport !== "stdio")
     throw new TypeError("Expected an stdio registration");
   if (
-    (client.format === "omp" || client.format === "pi") &&
+    (client.format === "omp" ||
+      client.format === "pi" ||
+      client.name === "claude_code") &&
     registration.type !== undefined &&
     registration.type !== "stdio"
   )

@@ -12,6 +12,135 @@ import {
 import { systemUninstallHost } from "../../../src/application/Uninstall.js";
 import { createTestTempDirectory } from "../../fixtures/temporaryDirectory.js";
 
+it("local uninstall preserves malformed project policy while removing an owned registration", async () => {
+  const root = await createTestTempDirectory("rea-claude-owned-local-");
+  const configPath = join(root, ".claude.json");
+  const key = "/selected/project";
+  await writeFile(
+    configPath,
+    JSON.stringify({
+      projects: {
+        [key]: {
+          disabledMcpServers: null,
+          mcpServers: {
+            rea: { command: "rea", args: ["mcp"] },
+            peer: { command: "peer" },
+          },
+        },
+      },
+    }),
+  );
+  const host = systemUninstallHost(root, undefined, {});
+  try {
+    expect(
+      await host.removeClient({
+        name: "claude_code",
+        format: "json",
+        configPath,
+        claudeProjectDirectory: key,
+      }),
+    ).toMatchObject({ status: "removed" });
+    expect(JSON.parse(await readFile(configPath, "utf8"))).toEqual({
+      projects: {
+        [key]: {
+          disabledMcpServers: null,
+          mcpServers: { peer: { command: "peer" } },
+        },
+      },
+    });
+  } finally {
+    await host.close?.();
+  }
+});
+
+it("default uninstall removes only user-scope registrations from a Claude profile", async () => {
+  const root = await createTestTempDirectory("rea-claude-user-uninstall-");
+  const configPath = join(root, ".claude.json");
+  const local = {
+    mcpServers: { rea: { command: "rea", args: ["mcp"] } },
+    trust: true,
+  };
+  await writeFile(
+    configPath,
+    JSON.stringify({
+      mcpServers: { rea: { command: "rea", args: ["mcp"] } },
+      projects: { "/project": local },
+    }),
+  );
+  const host = systemUninstallHost(root, undefined, {});
+  try {
+    expect(
+      await host.removeClient({
+        name: "claude_code",
+        format: "json",
+        configPath,
+      }),
+    ).toMatchObject({ status: "removed" });
+    expect(JSON.parse(await readFile(configPath, "utf8"))).toEqual({
+      mcpServers: {},
+      projects: { "/project": local },
+    });
+  } finally {
+    await host.close?.();
+  }
+});
+
+it("restores the whole profile when local uninstall readback retains the owned entry", async () => {
+  const root = await createTestTempDirectory("rea-local-uninstall-rollback-");
+  const configPath = join(root, ".claude.json");
+  const project = "/selected/project";
+  const original = JSON.stringify({
+    mcpServers: { rea: { command: "user" } },
+    projects: {
+      [project]: {
+        trust: true,
+        mcpServers: {
+          rea: { command: "rea", args: ["mcp"] },
+          peer: { command: "peer" },
+        },
+      },
+    },
+  });
+  let current = original;
+  let backup: string | undefined;
+  let writes = 0;
+  const host = systemUninstallHost(
+    root,
+    {
+      readText: async () => current,
+      copy: async () => {
+        backup = current;
+      },
+      writeText: async (_path, contents) => {
+        writes++;
+        current = writes === 1 ? original : contents;
+      },
+      stat: async () => ({ isSymbolicLink: () => false }),
+      remove: async () => {
+        throw new Error("Local rollback must not delete files");
+      },
+    },
+    {},
+  );
+  try {
+    const result = await host.removeClient({
+      name: "claude_code",
+      format: "json",
+      configPath,
+      claudeProjectDirectory: project,
+    });
+    expect(result).toMatchObject({
+      status: "failed",
+      detail: expect.stringContaining("original was restored"),
+    });
+    expect(writes).toBe(2);
+    expect(current).toBe(original);
+    expect(backup).toBe(original);
+  } finally {
+    await host.close?.();
+  }
+});
+
 it("accepts a literal UTF-8 replacement character without changing its value", async () => {
   const root = await createTestTempDirectory("rea-client-config-utf8-");
   const configPath = join(root, "config.json");

@@ -11,9 +11,11 @@ import { selectLinuxPrivateDisplayStrategy } from "./hopper/LinuxPrivateDisplayP
 /** Compose provider diagnostics at the outer CLI adapter boundary. */
 export const createSystemDoctorHost = (
   environment: Readonly<NodeJS.ProcessEnv> = process.env,
+  workspaceDirectory?: string,
 ): DoctorHost =>
   systemDoctorHost({
     environment,
+    ...(workspaceDirectory === undefined ? {} : { workspaceDirectory }),
     providerInspections: async () => [
       await inspectSystemGhidraProvider(environment),
       inspectIdaRegistration(environment.REA_IDA_MCP_CONFIG),

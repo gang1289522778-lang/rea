@@ -69,6 +69,8 @@ export const discoverSetupState = async (input: {
   const clientStates = clients.map((client): SetupClientState => {
     const registration = registrationByClient.get(client.name);
     const ownedRegistration =
+      (client.claudeProjectDirectory === undefined ||
+        registration?.registration_scope === "local") &&
       (registration?.state === "aligned" || registration?.state === "stale") &&
       isOwnedClientRegistrationCommand(registration.command);
     const configured = ownedRegistration;
@@ -258,12 +260,16 @@ const setupPlan = (input: {
       kind: "configure_client",
       label: client.displayName ?? client.name,
       target: client.configPath,
-      detail: clientConfigurationDetail(
-        client.displayName ?? client.name,
-        input.command,
-        input.providerEnvironment,
-        input.installHopper,
-      ),
+      detail:
+        (client.claudeProjectDirectory === undefined
+          ? ""
+          : `Private local scope for ${client.claudeProjectDirectory}. Personal skills are retained. `) +
+        clientConfigurationDetail(
+          client.displayName ?? client.name,
+          input.command,
+          input.providerEnvironment,
+          input.installHopper,
+        ),
       external: false,
       operation,
       ...(backupPath === undefined ? {} : { backupPath }),

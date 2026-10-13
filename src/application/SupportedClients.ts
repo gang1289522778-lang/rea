@@ -13,6 +13,8 @@ export interface SetupClient {
   readonly name: string;
   readonly displayName?: string;
   readonly configPath: string;
+  /** Exact private Claude Code project key; never falls back to user scope. */
+  readonly claudeProjectDirectory?: string;
   /** User configuration files in increasing precedence, including the write target. */
   readonly configPaths?: readonly string[];
   /** Read-only Gemini scopes and trust inputs; never setup write targets. */

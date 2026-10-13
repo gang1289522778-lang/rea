@@ -127,12 +127,47 @@ Setup pins package-runner MCP registrations to the exact installed REA version,
 installs the matching skill and on-demand references in the same plan, and adds
 `startup_timeout_sec = 30` for Codex and Grok Build.
 
+For one private Claude Code project, run:
+
+```sh
+rea setup --client claude_code --scope local --project /path/to/project --dry-run
+rea setup --client claude_code --scope local --project /path/to/project --yes
+rea doctor --client claude_code --project /path/to/project --json
+rea uninstall --scope local --project /path/to/project
+```
+
+`--project` defaults to the current directory for local setup and uninstall.
+The plan names the resolved project and profile file. Local setup skips personal
+skill installation; local uninstall retains personal skills and shared data.
+Both preserve user registrations, other projects, project trust settings and
+other servers, with a first backup and readback verification. Local setup
+requires only `--client claude_code`; it cannot install Hopper or personal
+skills. Local uninstall cannot use `--purge-data`. The default scope remains
+`user` for setup and uninstall. Shared `.mcp.json` project scope is not a write target.
+
 ## Check readiness for your task
 
 Run `rea doctor` when you need diagnosis. It reads host prerequisites and agent
 configuration without changing them. Without options, it audits every detected
 registration, the installed skill and optional analysis engines; its overall
 `healthy` value can be false while your chosen workflow works.
+
+For Claude Code, the CLI doctor checks the private local REA registration for
+the current project in `projects[<absolute directory>].mcpServers` inside
+`~/.claude.json` (or the configured Claude profile). A local `rea` entry takes
+precedence over the user entry, with no field merging. The registration report
+includes `registration_scope` (`local` or `user`) and, when project policy applies,
+`project_directory`, preserving the stored project key. Project discovery uses
+the physical directory and its nearest enclosing Git directory. Git worktree
+`gitdir`/`commondir` metadata selects the original checkout's project entry;
+without a Git marker, it uses the current directory. On Windows, lookups use
+Claude's forward-slash project keys. The project directory must exist and be
+readable; resolution failures retain `requested_project_directory` while the
+registration scope remains unresolved. Shared `.mcp.json` and managed policy registrations are not
+audited by this check. A project `disabledMcpServers` entry marks REA as stale
+and points to `/mcp` to re-enable it before local setup. Use `doctor --project`
+to select another directory explicitly. See
+[Claude Code's MCP scopes](https://code.claude.com/docs/en/mcp#mcp-installation-scopes).
 
 Select the part you want to check:
 

@@ -50,42 +50,65 @@ const registerSetupCommand = (
   cli.command(CLI_COMMANDS.setup, {
     description: "Configure agent integrations and optional analysis providers",
     outputPolicy: "agent-only",
-    options: z.object({
-      yes: z
-        .boolean()
-        .default(false)
-        .describe("Approve user-owned setup actions without prompting"),
-      installHopper: z
-        .boolean()
-        .default(false)
-        .describe("Also approve Hopper installation with --yes"),
-      client: z
-        .array(supportedClientSchema)
-        .default([])
-        .describe("Agent integration to configure; repeat for multiple agents"),
-      skillClient: z
-        .array(skillClientSchema)
-        .default([])
-        .describe("Existing client skill destination to update; repeatable"),
-      allDetected: z
-        .boolean()
-        .default(false)
-        .describe("Configure every detected supported agent"),
-      skill: z
-        .boolean()
-        .optional()
-        .describe(
-          "Override the bundled skill included with agent integrations",
-        ),
-      dryRun: z
-        .boolean()
-        .default(false)
-        .describe("Print the resolved plan without applying it"),
-      accessible: z
-        .boolean()
-        .default(false)
-        .describe("Use sequential accessible setup prompts"),
-    }),
+    options: z
+      .object({
+        yes: z
+          .boolean()
+          .default(false)
+          .describe("Approve user-owned setup actions without prompting"),
+        installHopper: z
+          .boolean()
+          .default(false)
+          .describe("Also approve Hopper installation with --yes"),
+        client: z
+          .array(supportedClientSchema)
+          .default([])
+          .describe(
+            "Agent integration to configure; repeat for multiple agents",
+          ),
+        skillClient: z
+          .array(skillClientSchema)
+          .default([])
+          .describe("Existing client skill destination to update; repeatable"),
+        allDetected: z
+          .boolean()
+          .default(false)
+          .describe("Configure every detected supported agent"),
+        skill: z
+          .boolean()
+          .optional()
+          .describe(
+            "Override the bundled skill included with agent integrations",
+          ),
+        dryRun: z
+          .boolean()
+          .default(false)
+          .describe("Print the resolved plan without applying it"),
+        accessible: z
+          .boolean()
+          .default(false)
+          .describe("Use sequential accessible setup prompts"),
+        scope: z
+          .enum(["user", "local"])
+          .default("user")
+          .describe("Claude Code registration scope"),
+        project: z
+          .string()
+          .optional()
+          .describe("Directory for private local scope; defaults to cwd"),
+      })
+      .refine(
+        (options) =>
+          options.scope === "local"
+            ? options.client.length === 1 &&
+              options.client[0] === "claude_code" &&
+              !options.allDetected &&
+              options.skillClient.length === 0 &&
+              options.skill !== true &&
+              !options.installHopper
+            : options.project === undefined,
+        "Local scope requires only --client claude_code and excludes personal skills or Hopper installation; --project requires --scope local",
+      ),
     alias: { yes: "y" },
     run: ({ options, formatExplicit }) =>
       logCliCommand(
@@ -106,6 +129,10 @@ const registerDoctorCommand = (
     description: "Check whether REA is ready",
     options: z.object({
       target: z.string().optional().describe("Optional app path to check"),
+      project: z
+        .string()
+        .optional()
+        .describe("Claude Code project directory to diagnose; defaults to cwd"),
       client: z
         .array(supportedClientSchema)
         .default([])
@@ -128,7 +155,7 @@ const registerDoctorCommand = (
           ]);
         return runDoctorOwned(
           options.target,
-          createSystemDoctorHost(environment),
+          createSystemDoctorHost(environment, options.project ?? process.cwd()),
           doctorScope(options),
         );
       }),
@@ -142,12 +169,30 @@ const registerMaintenanceCommands = (
 ): void => {
   cli.command(CLI_COMMANDS.uninstall, {
     description: "Remove REA-owned agent configuration and skill files",
-    options: z.object({
-      purgeData: z
-        .boolean()
-        .default(false)
-        .describe("Also remove REA caches and state"),
-    }),
+    options: z
+      .object({
+        purgeData: z
+          .boolean()
+          .default(false)
+          .describe("Also remove REA caches and state"),
+        scope: z
+          .enum(["user", "local"])
+          .default("user")
+          .describe(
+            "Remove user registrations or one private Claude Code project",
+          ),
+        project: z
+          .string()
+          .optional()
+          .describe("Local project directory; defaults to cwd"),
+      })
+      .refine(
+        (options) =>
+          options.scope === "local"
+            ? !options.purgeData
+            : options.project === undefined,
+        "Local uninstall cannot purge shared data; --project requires --scope local",
+      ),
     run: ({ options }) =>
       logCliCommand(
         logger,
@@ -161,6 +206,10 @@ const registerMaintenanceCommands = (
               homeDirectoryFromEnvironment(environment, process.platform),
               undefined,
               environment,
+              process.platform,
+              options.scope === "local"
+                ? { claudeProjectDirectory: options.project ?? process.cwd() }
+                : {},
             ),
           );
         },
@@ -191,6 +240,8 @@ const registerMaintenanceCommands = (
 };
 
 interface SetupCommandOptions {
+  readonly scope: "user" | "local";
+  readonly project?: string | undefined;
   readonly yes: boolean;
   readonly installHopper: boolean;
   readonly client: readonly string[];
@@ -219,7 +270,18 @@ const runSetupCommand = async (
     ]);
   const result = await runSetup(
     setupRunOptions(input, interactive, hasExplicitScope),
-    systemSetupHost(createSystemDoctorHost(environment), environment),
+    systemSetupHost(
+      createSystemDoctorHost(
+        environment,
+        options.scope === "local"
+          ? (options.project ?? process.cwd())
+          : undefined,
+      ),
+      environment,
+      options.scope === "local"
+        ? { claudeProjectDirectory: options.project ?? process.cwd() }
+        : {},
+    ),
     interactive
       ? (actions, context) =>
           confirmInteractiveSetup(actions, options.accessible, context)
@@ -254,13 +316,19 @@ const setupRunOptions = (
     structured: input.formatExplicit || options.dryRun,
     dryRun: options.dryRun,
     allDetectedClients: options.allDetected,
-    proposeHopper: interactive || options.installHopper,
+    proposeHopper:
+      options.scope !== "local" && (interactive || options.installHopper),
     ...(hasSelectedClients ? { clientIds: options.client } : {}),
     ...(options.skillClient.length > 0
       ? { skillClientIds: options.skillClient }
       : {}),
     ...(hasExplicitScope
-      ? { installSkill: options.skill ?? agentIntegrationSelected }
+      ? {
+          installSkill:
+            options.scope === "local"
+              ? false
+              : (options.skill ?? agentIntegrationSelected),
+        }
       : {}),
     ...(interactive ? { onProgress: renderSetupProgress } : {}),
     ...(hasSelectedClients
@@ -271,7 +339,10 @@ const setupRunOptions = (
               ? { skillClients: options.skillClient }
               : {}),
             providers: options.installHopper ? ["hopper"] : [],
-            skill: options.skill ?? agentIntegrationSelected,
+            skill:
+              options.scope === "local"
+                ? false
+                : (options.skill ?? agentIntegrationSelected),
           },
         }
       : {}),

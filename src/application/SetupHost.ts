@@ -1,4 +1,5 @@
 import { access } from "node:fs/promises";
+import { claudeCodeLocalClients } from "./ClaudeCodeProjectDirectory.js";
 import { resolve } from "node:path";
 
 import { ArtifactResourceScope } from "../artifacts/ArtifactResourceScope.js";
@@ -103,6 +104,7 @@ export const hostRemediation = async (
 export const systemSetupHost = (
   selectedDoctorHost: DoctorHost | undefined = undefined,
   environment: Readonly<NodeJS.ProcessEnv> = process.env,
+  options: { readonly claudeProjectDirectory?: string } = {},
 ): SetupHost => {
   const doctorHost = selectedDoctorHost ?? systemDoctorHost({ environment });
   const platform = doctorHost.platform;
@@ -112,6 +114,17 @@ export const systemSetupHost = (
       ? systemMacHopperInstallHost(homeDirectory, environment)
       : undefined;
   const resources = new ArtifactResourceScope();
+  let localClients: Promise<readonly SetupClient[]> | undefined;
+  const scopedClients = () => {
+    const clients = supportedClients(homeDirectory, platform, environment);
+    if (options.claudeProjectDirectory === undefined)
+      return Promise.resolve(clients);
+    return (localClients ??= claudeCodeLocalClients(
+      clients,
+      options.claudeProjectDirectory,
+      resources,
+    ));
+  };
   return {
     platform,
     homeDirectory,
@@ -173,9 +186,20 @@ export const systemSetupHost = (
           }
         : failure;
     },
-    detectedClients: () => detectClients(homeDirectory, platform, environment),
-    supportedClients: () =>
-      Promise.resolve(supportedClients(homeDirectory, platform, environment)),
+    detectedClients: async () => {
+      if (options.claudeProjectDirectory === undefined)
+        return detectClients(homeDirectory, platform, environment);
+      const candidates = await scopedClients();
+      const detected = await Promise.all(
+        candidates.map((client) =>
+          client.configPathError === undefined
+            ? clientEvidencePresent(client)
+            : false,
+        ),
+      );
+      return candidates.filter((_, index) => detected[index]);
+    },
+    supportedClients: scopedClients,
     ...clientConfigurationOperations(resources),
     skillNeedsInstall: (clientIds) =>
       canonicalSkillNeedsInstall(

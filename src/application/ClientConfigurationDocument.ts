@@ -51,9 +51,21 @@ export interface ClientConfigurationDocument {
    * still loads them, and a native entry with the same name takes precedence.
    */
   readonly legacyServers: Record<string, unknown>;
+  /** Validated opt-out policy for the explicitly selected diagnostic project. */
+  readonly disabledServers?: readonly string[];
+  /** Selected project policy context, independent of the registration's source scope. */
+  readonly diagnosticProjectDirectory?: string;
 }
 
 const objectSchema = z.record(z.string(), z.unknown());
+
+/** Effective diagnosis may fall back; exact mutation selects only local data. */
+export interface ClaudeCodeConfigurationSelection {
+  readonly mode?: "local" | "effective";
+  readonly platform?: NodeJS.Platform;
+  /** Removal preserves unrelated policy without requiring it to be valid. */
+  readonly preserveDisabledPolicy?: boolean;
+}
 
 /** Compare parsed configuration values without depending on parser prototypes. */
 export const clientConfigurationValuesEqual = (
@@ -173,12 +185,35 @@ const OPENCODE_V2_MCP_SETTINGS = new Set(["servers", "timeout"]);
 export const parseClientConfiguration = (
   text: string,
   format: ClientConfigurationFormat | undefined,
+  claudeProjectDirectory?: string,
+  options: ClaudeCodeConfigurationSelection = {},
 ): ClientConfigurationDocument => {
   if (format === undefined || format === "unsupported")
     throw new TypeError("client does not have a supported MCP config format");
   // DeepSeek Harness stores a Cordis patch list, not a server table.
   if (format === "dsh") return parseDshCordisDocument(text);
   const document = parseDocument(text, format);
+  let projectContext: ClientConfigurationDocument | undefined;
+  if (claudeProjectDirectory !== undefined) {
+    if (format !== "json")
+      throw new TypeError("Claude local scope requires JSON");
+    projectContext = claudeCodeRegistrationConfiguration(
+      {
+        document,
+        servers: {},
+        serversPath: ["mcpServers"],
+        dialect: format,
+        legacyServers: {},
+      },
+      claudeProjectDirectory,
+      { ...options, mode: options.mode ?? "local" },
+    );
+    if (
+      options.mode !== "effective" ||
+      projectContext.serversPath[0] === "projects"
+    )
+      return projectContext;
+  }
   const serversKey = clientConfigurationServersKey(format);
   const value = document[serversKey];
   const servers =
@@ -210,6 +245,7 @@ export const parseClientConfiguration = (
       typeof native.type === "string")
   )
     return {
+      ...projectContext,
       document,
       servers,
       serversPath: [serversKey],
@@ -238,6 +274,65 @@ export const effectiveClientServer = (
     ? parsed.servers[name]
     : parsed.legacyServers[name];
 
+/** Select Claude Code's private local REA entry, replacing rather than merging user fields. */
+export const claudeCodeRegistrationConfiguration = (
+  parsed: ClientConfigurationDocument,
+  projectDirectory: string,
+  options: ClaudeCodeConfigurationSelection = {},
+): ClientConfigurationDocument => {
+  const exactLocal = options.mode === "local";
+  const platform = options.platform ?? process.platform;
+  const projectsValue = parsed.document.projects;
+  const projects =
+    projectsValue === undefined
+      ? {}
+      : requireObject(projectsValue, "Claude Code projects");
+  // Native Windows Claude Code looks up forward-slash keys, not backslash aliases.
+  const selectedDirectory =
+    platform === "win32"
+      ? projectDirectory.replaceAll("\\", "/")
+      : projectDirectory;
+  if (!Object.hasOwn(projects, selectedDirectory) && !exactLocal) return parsed;
+  const project = !Object.hasOwn(projects, selectedDirectory)
+    ? {}
+    : requireObject(
+        projects[selectedDirectory],
+        "Claude Code selected project",
+      );
+  const disabled = options.preserveDisabledPolicy
+    ? undefined
+    : z
+        .array(z.string())
+        .safeParse(
+          project.disabledMcpServers === undefined
+            ? []
+            : project.disabledMcpServers,
+        );
+  if (disabled !== undefined && !disabled.success)
+    throw new ClientConfigurationShapeError(
+      "Claude Code disabledMcpServers must be an array of strings",
+      { cause: disabled.error },
+    );
+  const contextual = {
+    ...parsed,
+    ...(disabled?.success === true ? { disabledServers: disabled.data } : {}),
+    diagnosticProjectDirectory: selectedDirectory,
+  };
+  if (project.mcpServers === undefined && !exactLocal) return contextual;
+  const servers =
+    project.mcpServers === undefined
+      ? {}
+      : requireObject(project.mcpServers, "Claude Code local mcpServers");
+  if (!Object.hasOwn(servers, PRODUCT_IDENTITY.mcpServerKey) && !exactLocal)
+    return contextual;
+  return {
+    ...contextual,
+    servers,
+    serversPath: ["projects", selectedDirectory, "mcpServers"],
+    legacyServers: {},
+  };
+};
+
 /**
  * Return `parsed.document` with `servers` at its server table. A legacy OpenCode
  * V1 member named in `removeLegacy` is removed beside a native V2 table.
@@ -255,8 +350,8 @@ export const withClientServers = (
           objectSchema.parse(servers[PRODUCT_IDENTITY.mcpServerKey]),
         )
       : editDshDocument(parsed);
-  const [key = "", nested] = parsed.serversPath;
-  if (nested === undefined) return { ...parsed.document, [key]: servers };
+  const [key = "", ...nestedPath] = parsed.serversPath;
+  if (nestedPath.length === 0) return { ...parsed.document, [key]: servers };
   // A fresh document may not hold the outer table yet (for example a new
   // ZCode `config.json` without an `mcp` object), so treat absence as empty.
   const outerValue = parsed.document[key];
@@ -268,7 +363,23 @@ export const withClientServers = (
     !OPENCODE_V2_MCP_SETTINGS.has(removeLegacy)
   )
     delete outer[removeLegacy];
-  return { ...parsed.document, [key]: { ...outer, [nested]: servers } };
+  return {
+    ...parsed.document,
+    [key]: withServersAtPath(outer, nestedPath, servers),
+  };
+};
+
+/** Replace the owned server table while retaining every ancestor and peer. */
+const withServersAtPath = (
+  document: Record<string, unknown>,
+  path: readonly string[],
+  servers: Record<string, unknown>,
+): Record<string, unknown> => {
+  const [key = "", ...rest] = path;
+  if (rest.length === 0) return { ...document, [key]: servers };
+  const nested =
+    document[key] === undefined ? {} : objectSchema.parse(document[key]);
+  return { ...document, [key]: withServersAtPath(nested, rest, servers) };
 };
 
 /** Read the value at a key path, or `undefined` when any member is absent. */
@@ -1165,6 +1276,7 @@ export const clientServerListedDisabled = (
   parsed: ClientConfigurationDocument,
   serverKey: string,
 ): boolean =>
+  parsed.disabledServers?.includes(serverKey) === true ||
   (parsed.dialect === "grok" &&
     grokServerListedDisabled(parsed.document, serverKey)) ||
   (parsed.dialect === "omp" &&

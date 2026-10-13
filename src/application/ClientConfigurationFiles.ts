@@ -7,10 +7,12 @@ import {
   effectiveClientServer,
   parseClientConfiguration,
   type ClientConfigurationDocument,
+  type ClaudeCodeConfigurationSelection,
 } from "./ClientConfigurationDocument.js";
 import type { SetupClient } from "./SupportedClients.js";
 import { clientRegistrationEnvironment } from "./ClientRegistrationEnvironment.js";
 import type { ArtifactResourceScope } from "../artifacts/ArtifactResourceScope.js";
+import { claudeCodeProjectDirectory } from "./ClaudeCodeProjectDirectory.js";
 
 /** A named source failure that setup can explain without losing the bad path. */
 export interface ClientConfigurationFileError {
@@ -18,6 +20,9 @@ export interface ClientConfigurationFileError {
   readonly path: string;
   readonly detail: string;
   readonly cleanupFailure?: RegularFileCleanupFailure;
+  readonly registration_scope?: "user" | "local";
+  readonly project_directory?: string;
+  readonly requested_project_directory?: string;
 }
 
 /** Preserve named read failures and distinguish a missing source from an empty file. */
@@ -51,6 +56,8 @@ export const readConfigurationFile = async (
   path: string,
   format: SetupClient["format"],
   resources?: ArtifactResourceScope,
+  claudeProjectDirectory?: string,
+  options: ClaudeCodeConfigurationSelection = {},
 ): Promise<
   Result<ClientConfigurationDocument | undefined, ClientConfigurationFileError>
 > => {
@@ -59,7 +66,14 @@ export const readConfigurationFile = async (
   const content = source.value;
   if (content === undefined) return ok(undefined);
   try {
-    return ok(parseClientConfiguration(content, format));
+    return ok(
+      parseClientConfiguration(
+        content,
+        format,
+        claudeProjectDirectory,
+        options,
+      ),
+    );
   } catch (cause: unknown) {
     return err({
       kind: "malformed",
@@ -73,26 +87,79 @@ export const readConfigurationFile = async (
 export const readClientConfigurationFiles = async (
   client: SetupClient,
   resources?: ArtifactResourceScope,
+  options: {
+    readonly workspaceDirectory?: string;
+    readonly platform?: NodeJS.Platform;
+  } = {},
 ): Promise<
   Result<readonly ClientConfigurationDocument[], ClientConfigurationFileError>
 > => {
   const documents: ClientConfigurationDocument[] = [];
   for (const path of client.configPaths ?? [client.configPath]) {
+    let projectDirectory = client.claudeProjectDirectory;
+    if (
+      client.name === "claude_code" &&
+      options.workspaceDirectory !== undefined
+    ) {
+      try {
+        projectDirectory = await claudeCodeProjectDirectory(
+          options.workspaceDirectory,
+          resources,
+        );
+      } catch (cause: unknown) {
+        return err({
+          kind:
+            cause instanceof Error && "code" in cause
+              ? "unreadable"
+              : "malformed",
+          path,
+          requested_project_directory: options.workspaceDirectory,
+          detail: `Could not inspect the selected Claude Code project for ${path}: ${cause instanceof Error ? cause.message : String(cause)}. Check project access and Git metadata, then rerun doctor.`,
+          ...(cause instanceof RegularFileCleanupFailure
+            ? { cleanupFailure: cause }
+            : {}),
+        });
+      }
+    }
     const document = await readConfigurationFile(
       path,
       client.format,
       resources,
+      projectDirectory,
+      {
+        mode:
+          client.claudeProjectDirectory === undefined ? "effective" : "local",
+        platform: options.platform ?? process.platform,
+      },
     );
-    if (!document.ok) return document;
+    if (!document.ok)
+      return err({
+        ...document.error,
+        ...(projectDirectory === undefined
+          ? {}
+          : { project_directory: projectDirectory }),
+      });
     if (document.value !== undefined) {
-      const environment = clientRegistrationEnvironment(document.value);
+      const selected = document.value;
+      const environment = clientRegistrationEnvironment(selected);
       if (!environment.ok)
         return err({
           kind: "malformed",
           path,
-          detail: `Configuration ${path} has an invalid REA server environment: ${environment.error.settings.map(({ setting, constraint }) => `${setting}: ${constraint}`).join("; ")}. Repair it before rerunning setup.`,
+          ...(client.name === "claude_code"
+            ? {
+                registration_scope:
+                  selected.serversPath[0] === "projects"
+                    ? ("local" as const)
+                    : ("user" as const),
+                ...(selected.diagnosticProjectDirectory === undefined
+                  ? {}
+                  : { project_directory: selected.diagnosticProjectDirectory }),
+              }
+            : {}),
+          detail: `Configuration ${path} has an invalid REA server environment: ${environment.error.settings.map(({ setting, constraint }) => `${setting}: ${constraint}`).join("; ")}. Repair this registration before retrying.`,
         });
-      documents.push(document.value);
+      documents.push(selected);
     }
   }
   return ok(documents);
