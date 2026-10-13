@@ -92,6 +92,10 @@ const SOURCE_PATHS = {
   javascriptRecoveryContracts:
     "dist/contracts/javascript/javascriptRecoveryToolContracts.js",
   javascriptRecoveryProvider: "dist/javascript/recovery/WakaruRelease.js",
+  javascriptDeobfuscationContracts:
+    "dist/contracts/javascript/javascriptDeobfuscationToolContracts.js",
+  javascriptDeobfuscationProvider:
+    "dist/javascript/deobfuscation/JsRedoxRelease.js",
   supportedClients: "dist/application/SupportedClients.js",
   hopperProvider: "dist/hopper/HopperProviderCapabilities.js",
   ghidraProvider: "dist/ghidra/GhidraProviderCapabilities.js",

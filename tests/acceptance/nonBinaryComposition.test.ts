@@ -157,6 +157,37 @@ cliTest(
 );
 
 cliTest(
+  "preserves optional js-redox configuration through CLI and MCP",
+  async ({ cli }) => {
+    const root = await createTestTempDirectory("rea-deobfuscation-missing-");
+    const path = join(root, "bundle.js");
+    await writeFile(path, "console.log(1);\n");
+    const environment = {
+      REA_LOG_LEVEL: "silent",
+      REA_JS_REDOX_COMMAND: "relative-unavailable-tool",
+    };
+    const output = join(root, "output");
+    const cliResult = await cli.run({
+      arguments: ["deobfuscate-javascript-source", path, output, "--json"],
+      environment,
+      timeoutMs: 10000,
+    });
+    expect(cliResult.exitCode).toBe(1);
+    expect(cliResult.json).toMatchObject({ code: "capability_unavailable" });
+    const client = await connect(environment);
+    const response = await client.callTool({
+      name: "deobfuscate_javascript_source",
+      arguments: { path, output_directory: output },
+    });
+    expect(response.isError).toBe(true);
+    expect(parseMcpToolError(response)).toEqual({ error: cliResult.json });
+    expect(JSON.stringify(parseMcpToolError(response))).toContain(
+      "REA_JS_REDOX_COMMAND",
+    );
+  },
+);
+
+cliTest(
   "returns recovery path diagnostics before missing-engine errors in CLI and MCP",
   async ({ cli }) => {
     const root = await createTestTempDirectory("rea-recovery-path-parity-");

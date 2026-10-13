@@ -114,6 +114,8 @@ export const toolFamilyCatalog = (sources) => {
         ...sources.webScriptContracts.WEB_SCRIPT_TOOL_CONTRACTS,
         ...sources.javascriptRecoveryContracts
           .JAVASCRIPT_RECOVERY_TOOL_CONTRACTS,
+        ...sources.javascriptDeobfuscationContracts
+          .JAVASCRIPT_DEOBFUSCATION_TOOL_CONTRACTS,
       ],
     },
     {
@@ -362,6 +364,13 @@ export const providerCatalog = (sources) => {
       identity: sources.javascriptRecoveryProvider.WAKARU_PROVIDER_IDENTITY,
       contracts:
         sources.javascriptRecoveryContracts.JAVASCRIPT_RECOVERY_TOOL_CONTRACTS,
+    },
+    {
+      identity:
+        sources.javascriptDeobfuscationProvider.JS_REDOX_PROVIDER_IDENTITY,
+      contracts:
+        sources.javascriptDeobfuscationContracts
+          .JAVASCRIPT_DEOBFUSCATION_TOOL_CONTRACTS,
     },
   ]
     .map(({ identity, contracts }) => ({

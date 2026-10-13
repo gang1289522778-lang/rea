@@ -5,6 +5,9 @@ modules from explicitly selected UTF-8 JavaScript files or bundles. Use it on
 files returned by `export_web_scripts` or other local scripts. The operation
 never executes the selected or recovered application code.
 
+For proof-gated semantics-preserving simplification of a single script rather than
+module recovery, see [JavaScript deobfuscation](javascript-deobfuscation.md).
+
 ## Caller-supplied engine
 
 REA accepts Wakaru **^1.13.0** on Linux x64. The report parser is verified with
