@@ -95,7 +95,7 @@ export const execFileOutputFailure = (
     stderr,
     code: typeof code === "string" || typeof code === "number" ? code : null,
     signal: typeof signal === "string" ? signal : null,
-    killed: killed === true,
+    killed: killed === true || code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER",
     outputTruncated: code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER",
   };
 };

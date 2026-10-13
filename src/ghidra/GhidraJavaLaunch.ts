@@ -1,6 +1,43 @@
 import { snapshotEnvironment } from "../process/snapshotEnvironment.js";
 import { dirname, join } from "node:path";
-import { execFileOutput } from "../process/ExecFileOutput.js";
+import {
+  execFileOutput,
+  execFileOutputFailure,
+  type ExecFileOutputFailure,
+} from "../process/ExecFileOutput.js";
+
+/** Bound each configuration-helper stream before retention and redaction. */
+export const GHIDRA_LAUNCH_SUPPORT_CAPTURE_BYTES = 64 * 1024;
+
+type LaunchSupportPhase = "-envvars" | "-vmargs";
+type LaunchSupportOutcome = Omit<
+  ExecFileOutputFailure,
+  "killed" | "outputTruncated"
+> & {
+  readonly killed: boolean | null;
+  readonly outputTruncated: boolean | null;
+};
+
+/** Captured failure from Ghidra's release configuration helper. */
+export class GhidraLaunchSupportError extends Error {
+  readonly outcome: LaunchSupportOutcome | undefined;
+
+  constructor(phase: LaunchSupportPhase, cause: unknown) {
+    super(`Ghidra LaunchSupport ${phase} failed`, { cause });
+    this.name = "GhidraLaunchSupportError";
+    const outcome = execFileOutputFailure(cause);
+    // Native execFile aborts can settle before exit and final stream delivery.
+    this.outcome =
+      outcome === undefined
+        ? undefined
+        : {
+            ...outcome,
+            killed: outcome.code === "ABORT_ERR" ? null : outcome.killed,
+            outputTruncated:
+              outcome.code === "ABORT_ERR" ? null : outcome.outputTruncated,
+          };
+  }
+}
 
 /** Launch coordinates obtained from Ghidra's own release configuration helper. */
 export const ghidraJavaLaunch = async (options: {
@@ -43,14 +80,18 @@ export const ghidraJavaLaunch = async (options: {
   const environment = {
     ...snapshotEnvironment(options.environment, options.platform),
   };
-  const configuredEnvironment = await execFileOutput(
-    command,
-    [...supportArguments, "-envvars"],
-    {
-      env: environment,
-      ...(options.signal === undefined ? {} : { signal: options.signal }),
-    },
-  );
+  const supportOutput = async (phase: LaunchSupportPhase) => {
+    try {
+      return await execFileOutput(command, [...supportArguments, phase], {
+        env: environment,
+        maxBuffer: GHIDRA_LAUNCH_SUPPORT_CAPTURE_BYTES,
+        ...(options.signal === undefined ? {} : { signal: options.signal }),
+      });
+    } catch (cause: unknown) {
+      throw new GhidraLaunchSupportError(phase, cause);
+    }
+  };
+  const configuredEnvironment = await supportOutput("-envvars");
   options.onStderr("-envvars", configuredEnvironment.stderr);
   for (const line of configuredEnvironment.stdout.split(/\r?\n/u)) {
     if (line === "") continue;
@@ -65,14 +106,7 @@ export const ghidraJavaLaunch = async (options: {
     if ((environment[key] ?? "") === "")
       environment[key] = line.slice(separator + 1);
   }
-  const configuredArguments = await execFileOutput(
-    command,
-    [...supportArguments, "-vmargs"],
-    {
-      env: environment,
-      ...(options.signal === undefined ? {} : { signal: options.signal }),
-    },
-  );
+  const configuredArguments = await supportOutput("-vmargs");
   options.onStderr("-vmargs", configuredArguments.stderr);
   const vmArguments = configuredArguments.stdout
     .split(/\r?\n/u)

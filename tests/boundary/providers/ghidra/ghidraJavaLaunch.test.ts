@@ -10,6 +10,7 @@ import {
   GHIDRA_LAUNCH_COMMAND_OUTPUT_BYTES,
   type GhidraLaunchSession,
 } from "../../../../src/ghidra/GhidraLauncher.js";
+import { GHIDRA_LAUNCH_SUPPORT_CAPTURE_BYTES } from "../../../../src/ghidra/GhidraJavaLaunch.js";
 import { bindGhidraSessionFailure } from "../../../../src/ghidra/GhidraSessionError.js";
 import { spawnOwnedProviderProcess } from "../../../../src/process/ProviderProcess.js";
 import { cleanupOwnedProcessGroup } from "../../../../src/process/ProcessOwnership.js";
@@ -45,6 +46,7 @@ const warning = ${JSON.stringify(warning)};
 const stream = args.includes("-Xlog:disable") && args.includes("-Xlog:all=warning:stderr") ? process.stderr : process.stdout;
 if (mode !== "quiet" && mode !== "non-hotspot") stream.write(probe + ": " + warning + "\\n");
 if (mode === "credential") stream.write("explicit credential: private-transport-token\\n");
+if (mode === "overflow") stream.write("x".repeat(${GHIDRA_LAUNCH_SUPPORT_CAPTURE_BYTES + 4096}));
 if (mode === "large") stream.write("é".repeat(${GHIDRA_LAUNCH_COMMAND_OUTPUT_BYTES}) + "UNRETAINED-TAIL\\n");
 if (mode === "env-failure" || (probe === "-vmargs" && mode === "vm-failure")) {
   process.stderr.write("failed " + probe + "\\n");
@@ -214,6 +216,29 @@ describe.skipIf(process.platform === "win32")(
           });
       },
     );
+
+    it("bounds helper capture before projecting failure output", async () => {
+      const { session, launcher, analysisArguments } =
+        await fixture("overflow");
+      const launched = await launcher.launch(session);
+      expect(launched.ok).toBe(false);
+      if (launched.ok) throw new Error("Expected capture limit failure");
+      expect(analysisArguments).toEqual([]);
+      const failure = bindGhidraSessionFailure(() => ({}))(
+        "start",
+        launched.error.message,
+        launched.error,
+      );
+      expect(failure.diagnostics).toMatchObject({
+        failure_cause: {
+          launch_outcome: {
+            outputTruncated: true,
+            truncated: true,
+            killed: true,
+          },
+        },
+      });
+    });
 
     it("bounds retained UTF-8 warnings and reports original byte counts", async () => {
       const { session, launcher } = await fixture("large");

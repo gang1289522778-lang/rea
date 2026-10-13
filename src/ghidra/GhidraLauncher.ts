@@ -35,7 +35,10 @@ import {
   spawnOwnedProviderProcess,
 } from "../process/ProviderProcess.js";
 import { ghidraJavaEnvironment } from "./GhidraInstallation.js";
-import { ghidraJavaLaunch } from "./GhidraJavaLaunch.js";
+import {
+  ghidraJavaLaunch,
+  GhidraLaunchSupportError,
+} from "./GhidraJavaLaunch.js";
 import type { GhidraTransportKind } from "./GhidraTransport.js";
 import {
   snapshotGhidraExtensions,
@@ -87,17 +90,24 @@ export interface GhidraLauncher {
   ): Promise<Result<GhidraLaunch, GhidraLaunchError | AnalysisCancelledError>>;
 }
 
+/** One retained command outcome, including termination and capture completeness. */
+interface GhidraLaunchCommandOutput extends AnalysisCapturedOutput {
+  readonly code?: string | number | null;
+  readonly killed?: boolean | null;
+  readonly outputTruncated?: boolean | null;
+}
+
 /** Local launch failure retained as the cause of a provider-neutral error. */
 export class GhidraLaunchError extends Error {
   readonly #partialLaunch: GhidraLaunch | undefined;
-  readonly #capturedOutput: AnalysisCapturedOutput | undefined;
+  readonly #capturedOutput: GhidraLaunchCommandOutput | undefined;
   readonly launchSupport: readonly GhidraLaunchSupportDiagnostic[];
 
   constructor(
     message: string,
     options?: ErrorOptions & {
       readonly partialLaunch?: GhidraLaunch;
-      readonly capturedOutput?: AnalysisCapturedOutput;
+      readonly capturedOutput?: GhidraLaunchCommandOutput;
       readonly launchSupport?: readonly GhidraLaunchSupportDiagnostic[];
     },
   ) {
@@ -117,7 +127,7 @@ export class GhidraLaunchError extends Error {
   }
 
   /** Launcher command outcome retained when a launch command reported one. */
-  get capturedOutput(): AnalysisCapturedOutput | undefined {
+  get capturedOutput(): GhidraLaunchCommandOutput | undefined {
     return this.#capturedOutput === undefined
       ? undefined
       : { ...this.#capturedOutput };
@@ -131,15 +141,23 @@ export class GhidraLaunchError extends Error {
  */
 const ghidraLaunchCommandOutput = (
   cause: unknown,
-): AnalysisCapturedOutput | undefined => {
-  const failure = execFileOutputFailure(cause);
-  if (failure === undefined) return undefined;
+): GhidraLaunchCommandOutput | undefined => {
+  const failure =
+    cause instanceof GhidraLaunchSupportError
+      ? cause.outcome
+      : execFileOutputFailure(cause);
+  // Native aborts do not establish completeness; the detailed cause retains it as unknown.
+  if (failure === undefined || failure.outputTruncated === null)
+    return undefined;
   return {
     stdout: failure.stdout,
     stderr: failure.stderr,
     truncated: failure.outputTruncated,
     exit_code: typeof failure.code === "number" ? failure.code : null,
     signal: failure.signal,
+    code: failure.code,
+    killed: failure.killed,
+    outputTruncated: failure.outputTruncated,
   };
 };
 
