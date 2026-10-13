@@ -324,12 +324,15 @@ const OPERATION = "analyze_javascript_application";
 /**
  * Resolve the caller-selected input. A missing or unreadable selection is a
  * caller or host-permission failure, not a damaged artifact.
+ *
+ * Existence and readability are gated by `fs.access` first. `fs.realpath`
+ * is best-effort symlink normalisation only: on Windows it can throw
+ * `ENOENT` for reachable files (notably `*.asar` archives), so it must not
+ * be the existence check. Fixes https://github.com/morluto/rea/issues/2128.
  */
 const resolveSelectedInput = async (inputPath: string): Promise<string> => {
   try {
-    const path = await realpath(inputPath);
-    await access(path, constants.R_OK);
-    return path;
+    await access(inputPath, constants.R_OK);
   } catch (cause: unknown) {
     const code =
       cause instanceof Error && "code" in cause ? String(cause.code) : "";
@@ -346,6 +349,12 @@ const resolveSelectedInput = async (inputPath: string): Promise<string> => {
         },
       ]);
     throw cause;
+  }
+  try {
+    return await realpath(inputPath);
+  } catch {
+    // Realpath is best-effort; the existence gate already passed.
+    return inputPath;
   }
 };
 
