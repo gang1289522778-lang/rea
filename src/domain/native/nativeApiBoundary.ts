@@ -87,7 +87,34 @@ const inferredJumpTableSchema = z
   })
   .strict();
 
-const availableNativeApiBoundarySchema = z
+const prototypeDiagnosticSchema = z.strictObject({
+  kind: z.enum([
+    "stack-parameter-read",
+    "stack-cleanup",
+    "return-register-forwarding",
+    "x87-expression",
+  ]),
+  classification: z.enum(["conflict", "observation"]),
+  inferred_claim: z.string().min(1),
+  evidence: z
+    .array(
+      z.strictObject({
+        kind: z.enum([
+          "instruction",
+          "stack-read",
+          "return",
+          "call-site",
+          "branch",
+        ]),
+        address: z.string().min(1),
+        detail: z.string().min(1),
+      }),
+    )
+    .min(1),
+  residual_unknowns: z.array(z.string().min(1)).min(1),
+});
+
+const retainedNativeApiBoundarySchema = z
   .object({
     available: z.literal(true),
     provenance: z.string().min(1),
@@ -115,6 +142,14 @@ const availableNativeApiBoundarySchema = z
   })
   .strict();
 
+// Both versions remain JSON-safe and preserve the absence of older observations.
+const availableNativeApiBoundarySchema = retainedNativeApiBoundarySchema.extend(
+  {
+    prototype_diagnostics: z.array(prototypeDiagnosticSchema),
+    prototype_check_limitations: z.array(z.string().min(1)),
+  },
+);
+
 const unavailableNativeApiBoundarySchema = z
   .object({
     available: z.literal(false),
@@ -124,9 +159,10 @@ const unavailableNativeApiBoundarySchema = z
   .strict();
 
 /** Provider-neutral native API boundary observations attached to a function dossier. */
-export const nativeApiBoundarySchema = z.discriminatedUnion("available", [
+export const nativeApiBoundarySchema = z.union([
   unavailableNativeApiBoundarySchema,
   availableNativeApiBoundarySchema,
+  retainedNativeApiBoundarySchema,
 ]);
 
 /** One validated provider-neutral native API boundary observation. */

@@ -161,6 +161,82 @@ it("preserves native API limitations and unavailable residual unknowns", () => {
   );
 });
 
+it("projects older retained dossiers without discarding assembly or inventing consistency checks", () => {
+  const dossier = functionDossierSchema.parse(ghidraFunctionDossier());
+  if (dossier.native_api?.available !== true)
+    throw new Error("Missing API fixture");
+  const boundary = Object.fromEntries(
+    Object.entries(dossier.native_api).filter(
+      ([key]) =>
+        !["prototype_diagnostics", "prototype_check_limitations"].includes(key),
+    ),
+  );
+  for (const facet of ["assembly", "native_api"] as const) {
+    const view = projectAnalysisView(
+      nativeParent({ ...dossier, native_api: boundary }),
+      {
+        kind: "native",
+        facet,
+        offset: 0,
+        limit: 64,
+      },
+    );
+    if (!view.ok) throw view.error;
+    expect(view.value.unknowns).toContain(
+      "Instruction/prototype consistency was not recorded in this Evidence.",
+    );
+    if (view.value.kind !== "native") throw new Error("Expected native view");
+    if (facet === "assembly") expect(view.value.item).toEqual(dossier.assembly);
+    else expect(view.value.item).not.toHaveProperty("prototype_diagnostics");
+  }
+});
+
+it("preserves prototype diagnostic assumptions on native API and assembly views", () => {
+  const dossier = functionDossierSchema.parse(ghidraFunctionDossier());
+  if (dossier.native_api?.available !== true)
+    throw new Error("Missing API fixture");
+  const unknown =
+    "The source declaration and hidden parameters remain unknown.";
+  const limit =
+    "Stack reads after the first control transfer were not checked.";
+  const diagnostic = {
+    kind: "stack-parameter-read",
+    classification: "conflict",
+    inferred_claim: "The prototype has no parameters.",
+    evidence: [
+      {
+        kind: "stack-read",
+        address: "0x401001",
+        detail: "Entry ESP + 4 is read.",
+      },
+    ],
+    residual_unknowns: [unknown],
+  };
+  const parent = nativeParent({
+    ...dossier,
+    native_api: {
+      ...dossier.native_api,
+      prototype_diagnostics: [diagnostic],
+      prototype_check_limitations: [limit],
+    },
+  });
+  for (const facet of ["native_api", "assembly", "procedure"] as const) {
+    const view = projectAnalysisView(parent, {
+      kind: "native",
+      facet,
+      offset: 0,
+      limit: 64,
+    });
+    if (!view.ok) throw view.error;
+    expect(view.value.unknowns).toContain(unknown);
+    expect(view.value.limitations).toContain(limit);
+    if (facet === "native_api" && view.value.kind === "native")
+      expect(view.value.item).toMatchObject({
+        prototype_diagnostics: [diagnostic],
+      });
+  }
+});
+
 it("pages every retained dossier collection and the native API record", () => {
   const original = functionDossierSchema.parse(ghidraFunctionDossier());
   const page = (

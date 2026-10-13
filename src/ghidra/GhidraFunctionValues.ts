@@ -205,18 +205,31 @@ const procedureInfo = z
 const ghidraNativeApiBoundary = nativeApiBoundarySchema.superRefine(
   (value, context) => {
     if (!value.available) return;
+    if (!("prototype_diagnostics" in value)) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "Current Ghidra output must record prototype diagnostics and check limitations",
+      });
+      return;
+    }
     if (value.provenance !== "ghidra-high-function")
       context.addIssue({
         code: "custom",
         message:
           "Ghidra native API observations require HighFunction provenance",
       });
-    const addresses = value.jump_tables.flatMap((table) => [
-      table.dispatch_address,
-      ...table.data_sources.map(({ address }) => address),
-      ...table.mappings.map(({ target_address }) => target_address),
-      ...table.default_targets.map(({ target_address }) => target_address),
-    ]);
+    const addresses = [
+      ...value.prototype_diagnostics.flatMap(({ evidence }) =>
+        evidence.map(({ address }) => address),
+      ),
+      ...value.jump_tables.flatMap((table) => [
+        table.dispatch_address,
+        ...table.data_sources.map(({ address }) => address),
+        ...table.mappings.map(({ target_address }) => target_address),
+        ...table.default_targets.map(({ target_address }) => target_address),
+      ]),
+    ];
     if (
       addresses.some(
         (address) => !ghidraCanonicalAddressSchema.safeParse(address).success,

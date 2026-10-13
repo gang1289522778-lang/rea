@@ -127,7 +127,7 @@ overview merely because its source artifact is unchanged.
 | Calls and references    | Callers/callees contain only resolved functions. Reference edges preserve exact ReferenceManager type and call/jump/data/read/write/indirect/computed/conditional/terminal/external facts. Targetless computed flow remains unknown. Synthetic entry-point references without actionable memory sources are omitted explicitly.                                                                                                                                                                                                                                                                                            |
 | CFG                     | Dossiers use `BasicBlockModel` and retain only non-call successors inside the function body. CFG topology is address-normalized for comparison; provider-specific block construction remains a declared difference.                                                                                                                                                                                                                                                                                                                                                                                                        |
 | P-code value flow       | Function dossiers include up to 3,000 high-p-code operations, at most 64 inputs per operation, and 12,000 def-use edges. Results identify memory reads/writes, branches, and calls by p-code opcode, and mark decompiler-dead operations. Large results report truncation, an omitted-operation lower bound, and known omitted-input/edge counts. The dossier is an intra-function graph; `trace_native_values` composes derived parameter/argument and return/output dependencies across resolved calls. It does not resolve memory aliasing, call side effects, runtime behavior, persistent state, or business meaning. |
-| Result extent           | Function instruction scans and native API boundary observations remain complete. P-code flow is the explicit bounded exception; its count fields distinguish exact retained counts from lower-bound or known-omitted counts. Caller cancellation and provider failures remain distinct.                                                                                                                                                                                                                                                                                                                                    |
+| Result extent           | Function instruction scans remain complete. Native API prototype diagnostics use bounded entry-prefix, forwarding and epilogue probes with explicit limitations. P-code flow is also bounded; its count fields distinguish exact retained counts from lower-bound or known-omitted counts. Caller cancellation and provider failures remain distinct.                                                                                                                                                                                                                                                                      |
 
 Function extents and instruction completeness refer to Ghidra's analyzed body.
 An inferred no-return call can terminate that body before subsequent bytes.
@@ -151,6 +151,31 @@ flag and affected callers are repaired in the same pass. Unknown imports and
 genuine no-return imports keep their flags. Analysis profiles version this repair
 so snapshots produced before it are not reused. Windows P0 does not run it.
 
+`analyze_function` and `inspect_native_api` retain instruction-backed
+`prototype_diagnostics` alongside the inferred types, signature source and
+confidence. The initial checks support x86-32. They compare unmodified entry
+stack reads with recovered parameter storage and supported compiler-model
+slots, and compare near-return cleanup with stack extent. Cleanup bytes do not
+establish a source parameter count. Direct shared epilogues are probed through
+at most 16 simple instructions without adding owned-body ranges.
+
+EAX forwarding and x87 operations are observations requiring corroboration,
+including incomplete expressions and unknown conversion semantics. Checks stop
+at calls, conditional/raw p-code control flow and unsupported user-ops; aliased
+writes, custom allocation and dynamic stack adjustments retain uncertainty.
+Entry-prefix checks examine at most 256 instructions, 2048 raw p-code operations
+and 256 facts, bounding stack-write tracking and retained diagnostics.
+`prototype_check_limitations` records budget exhaustion and scope even when no conflict is found.
+Unknown compiler-model cleanup counts remain observations; known caller-cleaned
+models require zero argument-cleanup bytes even if a RET immediate matches the
+recovered parameter extent. Return forwarding uses datatype identity, aggregates
+all checked outgoing paths and incoming continuations once, and retains at most
+256 distinct instruction facts with an explicit coverage limitation when full.
+Unsupported architectures report consistency as unknown. Selected native API
+and assembly views preserve these limitations and diagnostic assumptions.
+Older retained Evidence keeps omitted diagnostic fields and reports that its
+instruction/prototype consistency was not recorded.
+
 `npm run verify:ghidra` compiles the versioned C oracle into debug and stripped
 host-native targets (x86-64/AArch64 ELF on Linux or Mach-O on macOS), plus a native
 DWARF 4 type-layout object. It proves the admitted operations, external functions, resolved thunks, exports, stripped-name
@@ -160,6 +185,17 @@ serialized concurrency, malformed-target rejection, profile identity, and
 process/project cleanup against real Ghidra 12.1.4. Unit fixtures separately
 cover startup deadlines, process exit, queued cancellation, and malformed wire
 output.
+
+On Linux x64 the host lane also runs `verify:ghidra:prototype`, requiring GNU
+`as` and `ld` (selectable with `REA_AS`/`REA_LD`). Its source-owned ELF32
+instruction controls cover conflicting and matching stack inputs/cleanup,
+written slots, conditional pointers, ABI padding, shared epilogues, tail calls
+and EAX overwrite/forwarding. Producer controls use the actual Windows x86
+compiler model and selected ephemeral metadata to reproduce inferred omissions;
+they do not establish Windows-host coverage. Independent CLI/MCP sessions use
+the normal ELF compiler model and compare complete boundaries, residual
+unknowns and retained views. Target instructions never execute and executable
+bytes must remain unchanged.
 
 `npm run verify:ghidra:cross-format` adds AArch64 ELF, x86-64 PE, and x86-64
 Mach-O target coverage. It requires `clang`, LLD, and `lld-link`; set

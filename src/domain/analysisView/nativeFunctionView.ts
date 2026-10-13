@@ -43,6 +43,18 @@ const parentFields = (
       "native_api unavailable: " + api.reason,
       ...api.residual_unknowns,
     );
+  else {
+    if (!("prototype_diagnostics" in api))
+      unknowns.push(
+        "Instruction/prototype consistency was not recorded in this Evidence.",
+      );
+    unknowns.push(
+      ...("prototype_diagnostics" in api
+        ? api.prototype_diagnostics
+        : []
+      ).flatMap(({ residual_unknowns }) => residual_unknowns),
+    );
+  }
   return {
     parent_evidence_id: parent.evidenceId,
     parent_operation: "analyze_function" as const,
@@ -54,6 +66,9 @@ const parentFields = (
       ...dossier.limitations,
       ...(flow?.limitations ?? []),
       ...(api?.available ? api.limitations : []),
+      ...(api?.available && "prototype_diagnostics" in api
+        ? api.prototype_check_limitations
+        : []),
     ]),
     unknowns: uniqueSorted(unknowns),
   };

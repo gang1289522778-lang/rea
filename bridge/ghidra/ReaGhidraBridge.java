@@ -2015,6 +2015,11 @@ public final class ReaGhidraBridge extends HeadlessScript {
         JsonArray parameters = new JsonArray();
         result.add("parameters", parameters);
 
+        JsonObject consistency = ReaGhidraPrototypeDiagnostics.inspect(
+            currentProgram, function, prototype, monitor, ReaGhidraBridge::canonicalAddress);
+        result.add("prototype_diagnostics", consistency.get("diagnostics"));
+        result.add("prototype_check_limitations", consistency.get("limitations"));
+
         JsonArray jumpTables = new JsonArray();
         result.add("jump_tables", jumpTables);
 

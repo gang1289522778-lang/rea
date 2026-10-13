@@ -43,6 +43,87 @@ const parseFunctionValueFixture = (
   return parsed.ok ? { ok: true as const, value: parsed.value.value } : parsed;
 };
 
+describe("Ghidra instruction/prototype diagnostics", () => {
+  it.each(["prototype_diagnostics", "prototype_check_limitations"])(
+    "requires current bridge output to include %s even though older retained Evidence is readable",
+    (field) => {
+      const dossier = functionDossierSchema.parse(ghidraFunctionDossier());
+      const boundary = Object.fromEntries(
+        Object.entries(ghidraNativeApiBoundary()).filter(
+          ([key]) => key !== field,
+        ),
+      );
+      expect(
+        parseFunctionValueFixture("analyze_function", {
+          ...dossier,
+          native_api: boundary,
+        }),
+      ).toMatchObject({ ok: false, error: { _tag: "AnalysisOutputError" } });
+    },
+  );
+
+  const diagnostic = {
+    kind: "stack-cleanup",
+    classification: "conflict",
+    inferred_claim: "Four inferred stack parameters occupy 16 bytes.",
+    evidence: [
+      {
+        kind: "return",
+        address: "0x401004",
+        detail: "RET cleans up 20 bytes.",
+      },
+    ],
+    residual_unknowns: [
+      "Hidden parameters and the source declaration remain unknown.",
+    ],
+  };
+
+  it("preserves conflicting instructions without changing inferred type provenance", () => {
+    const dossier = functionDossierSchema.parse(ghidraFunctionDossier());
+    const boundary = ghidraNativeApiBoundary();
+    const parsed = parseFunctionValueFixture("analyze_function", {
+      ...dossier,
+      native_api: {
+        ...boundary,
+        prototype_diagnostics: [diagnostic],
+        prototype_check_limitations: [
+          "Only bounded x86-32 patterns were checked.",
+        ],
+      },
+    });
+    if (!parsed.ok) throw parsed.error;
+    expect(parsed.value).toMatchObject({
+      native_api: {
+        signature_source: "analysis",
+        return_type: boundary.return_type,
+        prototype_diagnostics: [diagnostic],
+        prototype_check_limitations: [
+          "Only bounded x86-32 patterns were checked.",
+        ],
+      },
+    });
+  });
+
+  it("rejects non-canonical diagnostic locations and unevidenced claims", () => {
+    const dossier = functionDossierSchema.parse(ghidraFunctionDossier());
+    for (const evidence of [
+      [],
+      [{ ...diagnostic.evidence[0], address: "401004" }],
+    ]) {
+      expect(
+        parseFunctionValueFixture("analyze_function", {
+          ...dossier,
+          native_api: {
+            ...ghidraNativeApiBoundary(),
+            prototype_diagnostics: [{ ...diagnostic, evidence }],
+            prototype_check_limitations: [],
+          },
+        }),
+      ).toMatchObject({ ok: false, error: { _tag: "AnalysisOutputError" } });
+    }
+  });
+});
+
 describe("Ghidra function-analysis result values", () => {
   it("preserves file-offset resolution in Evidence locations and rejects inexact offsets", () => {
     const selection = {

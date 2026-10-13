@@ -32,6 +32,7 @@ import {
 } from "./verify-real-ghidra-inventory.mjs";
 import { completeVerifierRun, createVerifierRun } from "./lib/verifier-run.mjs";
 import { hasTypedSwitchEvidence } from "./verify-real-ghidra-switch-assertions.mjs";
+import { verifyGhidraPrototypeDiagnostics } from "./verify-ghidra-prototype-diagnostics.mjs";
 
 import {
   verifyDenseDefaultReturn,
@@ -331,6 +332,16 @@ try {
       ? (crossResults[0]?.native_api_cli ?? null)
       : jumpTable.native_api_cli,
     native_value_e2e: debug.native_values,
+    prototype_diagnostics:
+      process.platform === "linux" &&
+      process.arch === "x64" &&
+      !aarch64JumpTableOnly
+        ? await verifyGhidraPrototypeDiagnostics({ installation })
+        : {
+            status: "unverified",
+            reason:
+              "The x86-32 instruction oracle requires the Linux x64 GNU assembler lane.",
+          },
     custom_target: custom === null ? null : summary(custom),
     cleanup: "complete",
   };
@@ -448,7 +459,19 @@ async function verifyNativeApiCli(
       ) ||
       expectedCases.some((caseValue) => !denseCases.has(caseValue)) ||
       !mappingsAreExact ||
-      evidence.normalized_result?.residual_unknowns?.length !== 0)
+      JSON.stringify(
+        [...evidence.normalized_result.residual_unknowns].sort(),
+      ) !==
+        JSON.stringify(
+          [
+            ...new Set([
+              ...boundary.prototype_check_limitations,
+              ...boundary.prototype_diagnostics.flatMap(
+                ({ residual_unknowns }) => residual_unknowns,
+              ),
+            ]),
+          ].sort(),
+        ))
   )
     throw new Error(
       `The shipped inspect-native-api CLI did not preserve complete dense jump-table output: ${stdout}`,

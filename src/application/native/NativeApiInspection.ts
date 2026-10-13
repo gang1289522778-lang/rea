@@ -50,6 +50,7 @@ export const projectNativeApiInspection = (
               "return and parameter boundary types",
               "confidence and inference evidence",
               "jump-table dispatch, data, and target addresses",
+              "instruction/prototype diagnostics and their unresolved assumptions",
             ]
           : [boundary.reason],
       },
@@ -70,7 +71,18 @@ export const projectNativeApiInspection = (
 const availableResidualUnknowns = (
   boundary: Extract<NativeApiBoundary, { readonly available: true }>,
 ): readonly string[] => {
-  const unknowns: string[] = [];
+  const unknowns: string[] = [
+    ...(!("prototype_diagnostics" in boundary)
+      ? ["Instruction/prototype consistency was not recorded in this Evidence."]
+      : []),
+    ...("prototype_diagnostics" in boundary
+      ? boundary.prototype_check_limitations
+      : []),
+    ...("prototype_diagnostics" in boundary
+      ? boundary.prototype_diagnostics
+      : []
+    ).flatMap(({ residual_unknowns }) => residual_unknowns),
+  ];
   for (const table of boundary.jump_tables) {
     if (table.default_targets.length === 0)
       unknowns.push(

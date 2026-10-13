@@ -309,12 +309,18 @@ function assertWorkflowIdentity(evidence, sha256) {
 }
 
 function expectedResidualUnknowns(boundary, fixture) {
-  const unknowns = [boundary.return_type, ...boundary.parameters]
-    .filter(({ confidence }) => confidence === "low")
-    .map(
-      ({ role, data_type: type }) =>
-        `Can the inferred ${role} type ${type} be confirmed with imported metadata or an ABI probe?`,
-    );
+  const unknowns = [
+    ...boundary.prototype_check_limitations,
+    ...boundary.prototype_diagnostics.flatMap(
+      ({ residual_unknowns }) => residual_unknowns,
+    ),
+    ...[boundary.return_type, ...boundary.parameters]
+      .filter(({ confidence }) => confidence === "low")
+      .map(
+        ({ role, data_type: type }) =>
+          `Can the inferred ${role} type ${type} be confirmed with imported metadata or an ABI probe?`,
+      ),
+  ];
   if (fixture.unsafe_integer)
     unknowns.push(
       `Which source-level case values correspond to every target dispatched at ${boundary.jump_tables[0].dispatch_address}?`,

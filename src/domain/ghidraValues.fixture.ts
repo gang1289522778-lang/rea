@@ -81,6 +81,8 @@ export const ghidraNativeApiBoundary = () => ({
     ],
   },
   parameters: [],
+  prototype_diagnostics: [],
+  prototype_check_limitations: [],
   jump_tables: [
     {
       dispatch_address: "0x401010",

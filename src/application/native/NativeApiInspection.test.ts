@@ -71,6 +71,58 @@ describe("native API switch uncertainty", () => {
 });
 
 describe("native API inspection", () => {
+  it("keeps older Evidence readable without inventing a completed prototype check", () => {
+    const dossier = functionDossierSchema.parse(ghidraFunctionDossier());
+    if (dossier.native_api?.available !== true)
+      throw new Error("Missing API fixture");
+    const boundary = Object.fromEntries(
+      Object.entries(dossier.native_api).filter(
+        ([key]) =>
+          !["prototype_diagnostics", "prototype_check_limitations"].includes(
+            key,
+          ),
+      ),
+    );
+    const retained = functionDossierSchema.parse({
+      ...dossier,
+      native_api: boundary,
+    });
+    const inspection = projectNativeApiInspection(retained);
+    expect(inspection.boundary).not.toHaveProperty("prototype_diagnostics");
+    expect(inspection.residual_unknowns).toContain(
+      "Instruction/prototype consistency was not recorded in this Evidence.",
+    );
+  });
+
+  it("carries instruction conflicts and their unresolved assumptions into inspection", () => {
+    const dossier = functionDossierSchema.parse(ghidraFunctionDossier());
+    if (dossier.native_api?.available !== true)
+      throw new Error("Missing API fixture");
+    const unknown =
+      "Are hidden stack parameters or a custom convention responsible?";
+    const diagnostic = {
+      kind: "stack-cleanup",
+      classification: "conflict",
+      inferred_claim: "Four stack parameters occupy 16 bytes.",
+      evidence: [{ kind: "return", address: "0x401005", detail: "RET 20" }],
+      residual_unknowns: [unknown],
+    };
+    const input = functionDossierSchema.parse({
+      ...dossier,
+      native_api: {
+        ...dossier.native_api,
+        prototype_diagnostics: [diagnostic],
+      },
+    });
+    expect(projectNativeApiInspection(input)).toMatchObject({
+      boundary: {
+        prototype_diagnostics: [diagnostic],
+        signature_source: "analysis",
+      },
+      residual_unknowns: [unknown],
+    });
+  });
+
   it("preserves unsupported provider branches as residual unknowns", () => {
     const value = ghidraFunctionDossier();
     if (typeof value !== "object" || value === null || Array.isArray(value))
