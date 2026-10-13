@@ -69,6 +69,16 @@ npx rea-agents setup
 
 设置流程支持 Claude Code、Codex、Cursor、Gemini CLI、Grok Build 和[其他智能体](docs/installation.md#supported-agents)。提供方配置和手动注册 MCP 的方法见[安装与设置](docs/installation.md)。
 
+### DeepSeek Harness Desktop 原生插件
+
+原生 Desktop 支持尚未完成验证。不可变的 0.2.0 插件使用 Electron 可执行文件
+启动 MCP 子进程，因此不适用于 Desktop；启用该包也无法修复启动器。
+源码中的 0.2.1 候选版本包含修复，但尚未作为经过验证的 Desktop 版本发布。
+
+请勿使用旧 Desktop 安装地址。[候选集成指南](integrations/deepseek-harness/README.zh-CN.md)
+说明了调用方提供独立 Node 路径的要求和剩余验证工作。固定版本完成验证并发布后，
+再提供 Desktop 安装建议。
+
 ### 询问智能体
 
 ```text

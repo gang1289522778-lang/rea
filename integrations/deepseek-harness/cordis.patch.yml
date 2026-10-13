@@ -1,0 +1,19 @@
+# Compatible with the current dsh.bundle patch layering and MCP client bridge.
+# The launcher service resolves the installed REA path under any pnpm profile.
+# A pre-existing $DSH_HOME/cordis.patch.yml row with id rea-mcp overrides this
+# bundle (home patches have higher precedence); remove that legacy row first.
+- insert:
+    - id: rea-launcher
+      name: dsh-rea-bundle/launcher
+
+    - id: rea-mcp
+      name: "@deepseek-ai/dsh-mcp-client"
+      inject: [reaLauncher]
+      config:
+        serverName: rea
+        transport: stdio
+        command: !!js ctx.reaLauncher.command
+        args: !!js ctx.reaLauncher.args
+        env: !!js ctx.reaLauncher.env
+        toolCallTimeoutMs: !!js ctx.reaLauncher.toolCallTimeoutMs
+        failOnStartupError: true

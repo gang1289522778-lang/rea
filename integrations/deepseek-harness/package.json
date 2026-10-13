@@ -1,0 +1,37 @@
+{
+  "name": "dsh-rea-bundle",
+  "version": "0.2.1",
+  "description": "Installable DeepSeek Harness bundle for REA's local MCP reverse-engineering tools.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/morluto/rea.git",
+    "directory": "integrations/deepseek-harness"
+  },
+  "exports": {
+    ".": "./launcher.mjs",
+    "./launcher": "./launcher.mjs"
+  },
+  "files": [
+    "launcher.mjs",
+    "cordis.patch.yml",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE",
+    "scripts/activate-installed.mjs",
+    "scripts/cordis-contract.mjs"
+  ],
+  "engines": {
+    "node": "^22.19.0 || ^24.11.0 || >=26.0.0"
+  },
+  "dependencies": {
+    "rea-agents": "6.4.0",
+    "yaml": "2.9.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

@@ -16,7 +16,7 @@
   "vitepress": {
     "entry": ["docs/.vitepress/config.ts"]
   },
-  "ignoreBinaries": ["mkfifo"],
+  "ignoreBinaries": ["mkfifo", "dsh"],
   "ignoreDependencies": ["electron", "esbuild", "webpack"],
   "ignoreExportsUsedInFile": true,
   "rules": {

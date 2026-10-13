@@ -258,6 +258,138 @@ Harness integration, with live DeepSeek API compatibility remaining unverified.
 See the [Harness MCP guide](https://github.com/deepseek-ai/deepseek-harness/blob/639ed015397290b3745d163aafe02ffee4aa3f84/packages/mcp/mcp-client/README.md)
 for its native configuration contract.
 
+### Desktop bundle installed but disabled
+
+An installed `dsh-rea-bundle` dependency does not imply the bundle has
+been added to `~/.dsh/profiles/desktop/package.json`'s
+`dsh.profile.bundles`. The upstream plugin manager offers
+**Enable now** separately from install. If the installed bundle is not
+selected, the Desktop session will have no `mcp__rea__*` tools.
+The stored `cordis.yml` is an empty loader root; it does not show the
+effective runtime composition.
+
+Use **Desktop → Plugins → Installed plugins → dsh-rea-bundle → Enable**
+and restart. If that UI control is unavailable, the
+[reviewable local-only activation script](../integrations/deepseek-harness/README.md#desktop-installed-the-bundle-but-did-not-activate-it)
+checks the installed files, backs up the manifest, then appends only
+the missing bundle name. It is opt-in; default mode only reports status.
+The recovery helper is included in candidate 0.2.1 after qualification and
+publication; immutable 0.2.0 is unsuitable for Electron Desktop and its enable UI does not
+repair the launcher. Native Desktop support remains unqualified. Candidate
+qualification requires the standalone `REA_DSH_NODE_PATH` host setup described
+in the linked integration guide.
+After restart, confirm live `mcp__rea__*` tool discovery. The helper's
+`--status` reports stored selection only; `--verify` reports runtime
+composition as unverified and exits nonzero.
+Do **not** reinstall the bundle, change pnpm `allowBuilds`, or erase the
+Desktop profile to fix a disabled bundle.
+
+### DeepSeek Harness Desktop: fix `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`
+
+**Cause.** If the error names `rea-agents@6.4.0` and downloads a Git archive
+like `https://codeload.github.com/morluto/rea/tar.gz/<commit>`, the
+Desktop plugin manager was given the **root REA repository** rather than the
+installable `dsh-rea-bundle` package. Root `rea-agents` has a Git
+`prepare` script. pnpm deliberately refuses it under its supply-chain
+policy, and the root package does not declare `dsh.bundle`. Do **not** add
+the root package to `allowBuilds`: it still would not be a Harness bundle.
+
+**Fix with the Desktop UI** (requires no pnpm or npm CLI installation):
+
+```sh
+mkdir -p "$HOME/.dsh/plugin-packages"
+curl -fL --retry 3 -o "$HOME/.dsh/plugin-packages/dsh-rea-bundle-0.2.1.tgz" \
+  https://github.com/morluto/rea/releases/download/dsh-v0.2.1/dsh-rea-bundle-0.2.1.tgz
+curl -fL --retry 3 --output "$HOME/.dsh/plugin-packages/SHA256SUMS" https://github.com/morluto/rea/releases/download/dsh-v0.2.1/SHA256SUMS
+(cd "$HOME/.dsh/plugin-packages" && shasum -a 256 -c SHA256SUMS)
+printf '%s\n' "$HOME/.dsh/plugin-packages/dsh-rea-bundle-0.2.1.tgz"
+```
+
+1. Open **DeepSeek Harness Desktop → Plugins → Add plugin** (the sidebar's
+   Plugins page), and paste the **absolute local `.tgz` path** printed by
+   the final command. Do **not** paste the untagged repository URL. Tagged plugin Git URLs and versioned Release tarballs are supported alternatives.
+2. Install and enable **`dsh-rea-bundle`**, then completely quit and
+   reopen Desktop. Inspect its plugin list for the `rea-launcher` and
+   `rea-mcp` rows. If a prior `rea setup --client dsh` created a
+   home-level `rea-mcp` patch, back up the patch and remove only that
+   obsolete REA row: home patches override profile bundle configuration.
+3. If Desktop's `~/.dsh/profiles/desktop/package.json` contains a direct
+   `rea-agents` dependency referencing `xxxxxwater/rea` on GitHub,
+   back up the profile, then remove **only that incorrect direct dependency**
+   via the Desktop-bundled plugin manager, not by deleting the whole profile
+   or editing `allowBuilds`. An installation that failed before saving
+   the dependency may have nothing to remove.
+
+**Alternative from a cloned REA checkout:**
+
+```sh
+bash integrations/deepseek-harness/scripts/prepare-desktop-install.sh
+```
+
+That script downloads the pinned GitHub Release asset, validates SHA-256,
+keeps the archive in `$DSH_HOME/plugin-packages` (default `~/.dsh`),
+and prints the path to paste into the Desktop installer. It does not mutate
+the Desktop profile. After installing Desktop's **own** `dsh` command from
+the application menu **Manage dsh Command…**, fully quit Desktop and
+optionally run:
+
+```sh
+dsh plugin --profile desktop add "$HOME/.dsh/plugin-packages/dsh-rea-bundle-0.2.1.tgz"
+```
+
+A standalone `npm install -g @deepseek-ai/dsh` launcher may reject this
+with `profile "desktop" is managed exclusively by the Electron application`.
+Use the Desktop Plugins UI or its app-bundled CLI, not `dsh --profile
+desktop` (which tries to boot the reserved profile).
+
+### Native DeepSeek Harness bundle — Desktop Git install
+
+For a **direct install in Desktop → Plugins → Add plugin**, enter
+the **exact complete Git source**:
+
+```text
+https://github.com/morluto/rea#dsh-plugin-v0.2.1
+```
+
+This immutable tag points to a separate root `dsh-rea-bundle` package
+with `dsh.bundle` metadata, ready-to-run JavaScript and no Git
+`prepare` script. Its `rea-agents@6.4.0` dependency resolves from
+the npm registry as a prebuilt runtime.
+
+Using just `https://github.com/morluto/rea` instead downloads the
+main repository's `rea-agents` CLI, not the plugin, and pnpm may
+report `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED` on Git dependencies.
+**Do not approve scripts or modify `allowBuilds` to fix a wrong URL.**
+
+Alternatively enter the Release's direct tarball address:
+
+```text
+https://github.com/morluto/rea/releases/download/dsh-v0.2.1/dsh-rea-bundle-0.2.1.tgz
+```
+
+Both install sources are recognized as Git/tarball install specs by the
+current Desktop plugin manager. Choose one, enable `dsh-rea-bundle`
+and fully restart Desktop. A CLI profile is separate; on a Web CLI
+installation use:
+
+```sh
+dsh plugin --profile web add 'github:morluto/rea#dsh-plugin-v0.2.1'
+dsh --profile web --dump-config
+```
+
+If the Desktop profile has a retained incorrect `rea-agents` Git
+dependency, back up `~/.dsh/profiles/desktop/package.json` and
+remove **only that dependency** with the Desktop plugin manager.
+Do not delete other installed plugins. If the legacy
+`rea setup --client dsh` wrote a home-level `rea-mcp` override,
+back up the home patch before removing just that outdated entry.
+
+More detail:
+`integrations/deepseek-harness/README.md` and
+`integrations/deepseek-harness/README.zh-CN.md`.
+This Git/tarball pnpm install test does not replace real macOS Desktop
+GUI or paid-model API acceptance testing.
+
 ## Other client settings
 
 For OpenCode, setup writes the V1 `mcp.rea` entry, which OpenCode V1 and V2

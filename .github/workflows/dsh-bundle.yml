@@ -1,0 +1,226 @@
+name: DeepSeek Harness plugin compatibility
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "integrations/deepseek-harness/**"
+      - ".github/workflows/dsh-bundle.yml"
+      - "knip.json"
+  pull_request:
+    branches: [main]
+    paths:
+      - "integrations/deepseek-harness/**"
+      - ".github/workflows/dsh-bundle.yml"
+      - "knip.json"
+  workflow_dispatch:
+
+concurrency:
+  group: dsh-bundle-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    name: Bundle contract and Node tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+      - run: node --test integrations/deepseek-harness/tests/*.test.mjs
+      - run: node integrations/deepseek-harness/scripts/verify-package.mjs
+      - name: Verify Git-root plugin tree (no prepare scripts)
+        run: bash integrations/deepseek-harness/scripts/stage-git-plugin.sh --check
+      - name: Verify install artifact without build hooks
+        working-directory: integrations/deepseek-harness
+        run: |
+          npm pack --dry-run --json > /tmp/rea-dsh-pack.json
+          node -e 'const a=require("/tmp/rea-dsh-pack.json")[0].files.map(x=>x.path);for(const f of ["package.json","launcher.mjs","cordis.patch.yml","README.md","LICENSE"])if(!a.includes(f))throw Error("missing packed file: "+f)'
+
+  native-harness:
+    name: Latest upstream Harness + packaged REA MCP
+    needs: contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      DSH_HOME: /tmp/rea-dsh-profile
+      HUSKY: "0"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+      - name: Read owned bundle version
+        run: echo "REA_DSH_BUNDLE_VERSION=$(node -p 'require("./integrations/deepseek-harness/package.json").version')" >> "$GITHUB_ENV"
+      - name: Install pinned prebuilt REA runtime for local bundle
+        run: npm install --prefix integrations/deepseek-harness --ignore-scripts --no-audit --no-fund
+      - name: Verify real MCP initialization and tool discovery
+        run: node integrations/deepseek-harness/scripts/smoke-mcp.mjs
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: deepseek-ai/deepseek-harness
+          ref: master
+          path: harness-upstream
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: harness-upstream/package.json
+      - name: Build current upstream Harness
+        working-directory: harness-upstream
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run build
+      - name: Pack standalone Git distribution snapshot
+        run: |
+          tree="$(bash integrations/deepseek-harness/scripts/stage-git-plugin.sh --check | sed -n 's/^Standalone DSH tree: //p')"
+          mkdir -p "$RUNNER_TEMP/dsh-git-root"
+          git archive "$tree" | tar -xf - -C "$RUNNER_TEMP/dsh-git-root"
+          node -e 'const p=require(process.env.RUNNER_TEMP+"/dsh-git-root/package.json");if(p.name!=="dsh-rea-bundle"||!p.dsh?.bundle?.patch||p.scripts?.prepare)process.exit(1)'
+          npm pack "$RUNNER_TEMP/dsh-git-root" --ignore-scripts --pack-destination "$RUNNER_TEMP"
+      - name: Install standalone plugin tarball in real Harness profile
+        working-directory: harness-upstream
+        run: pnpm dsh plugin --profile web add "$RUNNER_TEMP/dsh-rea-bundle-${REA_DSH_BUNDLE_VERSION}.tgz"
+      - name: Verify native bundle composition
+        working-directory: harness-upstream
+        run: |
+          pnpm dsh --profile web --dump-config > /tmp/rea-dsh-composition.txt
+          grep -F 'dsh-rea-bundle' /tmp/rea-dsh-composition.txt
+          grep -F 'id: rea-mcp' /tmp/rea-dsh-composition.txt
+          grep -F 'ctx.reaLauncher.command' /tmp/rea-dsh-composition.txt
+      - name: Boot installed bundle through Harness and discover REA tools without an API key
+        working-directory: harness-upstream
+        run: node ../integrations/deepseek-harness/scripts/smoke-harness-bundle.mjs . "$DSH_HOME/profiles/web"
+      - name: Report scope
+        run: |
+          echo 'Validated: build-free bundle, prebuilt REA MCP handshake, current upstream Harness static composition and API-key-free runtime bundle boot through its MCP bridge.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Not validated: live DeepSeek API calls, paid providers, native Desktop installation, optional Ghidra/IDA.' >> "$GITHUB_STEP_SUMMARY"
+
+  release-plugin:
+    name: Publish standalone dsh-v plugin GitHub release
+    needs: [contract, native-harness]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'morluto/rea' && vars.REA_DSH_PUBLISH == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+      - name: Check whether this plugin version is already published
+        id: release-version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          version="$(node -p 'require("./integrations/deepseek-harness/package.json").version')"
+          tag="dsh-v${version}"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/releases?per_page=100" > "$RUNNER_TEMP/dsh-release-pages.json"
+          jq --arg tag "$tag" '[.[][] | select(.tag_name == $tag)]' "$RUNNER_TEMP/dsh-release-pages.json" > "$RUNNER_TEMP/dsh-release.json"
+          count="$(jq 'length' "$RUNNER_TEMP/dsh-release.json")"
+          if [ "$count" = 0 ]; then
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          elif [ "$count" = 1 ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+            complete="$(jq --arg name "dsh-rea-bundle-${version}.tgz" '.[0] | (.draft == false) and any(.assets[]; .name == $name) and any(.assets[]; .name == "SHA256SUMS")' "$RUNNER_TEMP/dsh-release.json")"
+            echo "exists=${complete}" >> "$GITHUB_OUTPUT"
+          else
+            echo 'Ambiguous release identity; publication refused' >&2
+            exit 1
+          fi
+      - name: Publish immutable standalone Git plugin tag
+        run: bash integrations/deepseek-harness/scripts/stage-git-plugin.sh --publish
+      - name: Package audited plugin sources without build hooks
+        if: steps.release-version.outputs.exists == 'false'
+        working-directory: integrations/deepseek-harness
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/release-artifacts"
+          npm pack --ignore-scripts --pack-destination "$GITHUB_WORKSPACE/release-artifacts"
+          (cd "$GITHUB_WORKSPACE/release-artifacts" && sha256sum *.tgz > SHA256SUMS)
+      - name: Create versioned plugin GitHub release
+        if: steps.release-version.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.release-version.outputs.tag }}
+          RELEASE_PRESENT: ${{ steps.release-version.outputs.present }}
+        run: |
+          if [ "$RELEASE_PRESENT" = true ]; then
+            for asset in release-artifacts/*; do
+              name="$(basename "$asset")"
+              if jq -e --arg name "$name" 'any(.[0].assets[]; .name == $name)' "$RUNNER_TEMP/dsh-release.json" >/dev/null; then
+                mkdir -p "$RUNNER_TEMP/dsh-existing"
+                gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$name" --dir "$RUNNER_TEMP/dsh-existing"
+                cmp "$asset" "$RUNNER_TEMP/dsh-existing/$name"
+              else
+                gh release upload "$RELEASE_TAG" "$asset" --repo "$GITHUB_REPOSITORY"
+              fi
+            done
+            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+          else
+            gh release create "$RELEASE_TAG" release-artifacts/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "REA for DeepSeek Harness ${RELEASE_TAG}" \
+              --notes-file integrations/deepseek-harness/RELEASE_NOTES.md
+          fi
+      - name: Summarize plugin distribution
+        env:
+          RELEASE_TAG: ${{ steps.release-version.outputs.tag }}
+        run: |
+          echo "Standalone Harness plugin: https://github.com/${GITHUB_REPOSITORY}/releases/tag/${RELEASE_TAG}" >> "$GITHUB_STEP_SUMMARY"
+          echo "The root REA npm/MCP Registry publication remains governed by release.yml." >> "$GITHUB_STEP_SUMMARY"
+
+  direct-git-install:
+    name: Test Desktop Add-plugin Git URL with pnpm
+    needs: release-plugin
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+      - name: Read owned bundle version
+        run: echo "REA_DSH_BUNDLE_VERSION=$(node -p 'require("./integrations/deepseek-harness/package.json").version')" >> "$GITHUB_ENV"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.0.0
+      - name: Install the exact Desktop URL in a fresh empty profile
+        env:
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/desktop-like-profile"
+          cd "$RUNNER_TEMP/desktop-like-profile"
+          printf '%s\n' '{"name":"test-desktop-install","private":true}' > package.json
+          pnpm add "https://github.com/${REPO}#dsh-plugin-v${REA_DSH_BUNDLE_VERSION}"
+          node - <<'NODE'
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const pkg = require('./node_modules/dsh-rea-bundle/package.json');
+          assert.equal(pkg.name, 'dsh-rea-bundle');
+          assert.equal(pkg.version, process.env.REA_DSH_BUNDLE_VERSION);
+          assert.equal(pkg.dsh.bundle.patch, './cordis.patch.yml');
+          assert.equal(pkg.scripts?.prepare, undefined);
+          assert(fs.existsSync('./node_modules/dsh-rea-bundle/launcher.mjs'));
+          assert(fs.existsSync('./node_modules/dsh-rea-bundle/cordis.patch.yml'));
+          const { createRequire } = require('node:module');
+          const requireFromBundle = createRequire(fs.realpathSync('./node_modules/dsh-rea-bundle/launcher.mjs'));
+          assert(fs.existsSync(requireFromBundle.resolve('rea-agents/scripts/rea.mjs')));
+          console.log('Desktop input Git URL installs dsh-rea-bundle without an allowBuilds exception');
+          NODE
+      - name: Report scope
+        run: |
+          echo 'Validated: exact Desktop Git install URL with pnpm, expected plugin identity, no prepare hooks.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Not validated here: macOS Electron GUI rendering or application-level enablement.' >> "$GITHUB_STEP_SUMMARY"
