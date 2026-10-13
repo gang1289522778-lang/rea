@@ -45,6 +45,13 @@ const registerOverviewCommands = (
       .describe("Load and update a local analysis snapshot"),
     ...nativeOpenOptionFields,
   });
+  // `analyze` has to declare the JavaScript integrity policy for its JavaScript
+  // lane, and that option carries a default. The binary lane performs no
+  // declared-integrity comparison, so only a policy that differs from the
+  // owner's own default is a request it cannot honor. Read the default from the
+  // schema rather than restating it here.
+  const defaultIntegrityPolicy =
+    javascriptApplicationOptions.shape.integrityPolicy.parse(undefined);
   cli.command(CLI_COMMANDS.analyze, {
     description: "Get an overview of an app",
     args: z.object({
@@ -84,6 +91,19 @@ const registerOverviewCommands = (
                 reason: "invalid_value",
                 message:
                   "Source selection requires the static JavaScript ASAR/directory analysis lane.",
+              },
+            ],
+          );
+        if (options.integrityPolicy !== defaultIntegrityPolicy)
+          throw new AnalysisInputError(
+            "analyze_javascript_application",
+            undefined,
+            [
+              {
+                path: ["integrity_policy"],
+                reason: "invalid_value",
+                message:
+                  "An integrity policy requires the static JavaScript ASAR/directory analysis lane; binary_overview accepts no input.",
               },
             ],
           );

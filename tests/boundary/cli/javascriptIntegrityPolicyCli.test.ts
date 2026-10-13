@@ -46,3 +46,23 @@ it("rejects the JavaScript integrity policy on binary-only inspection", async ()
     stdout: expect.stringContaining("Unknown flag: --integrityPolicy"),
   });
 });
+
+it("rejects the JavaScript integrity policy on a binary analyze target", async () => {
+  // `analyze` has to declare the option for its JavaScript lane, so a binary
+  // target needs an explicit refusal rather than proceeding without it.
+  await expect(
+    run(["analyze", "unused.bin", "--integrity-policy", "record-and-continue"]),
+  ).rejects.toMatchObject({
+    code: 1,
+    stdout: expect.stringContaining("integrity_policy"),
+  });
+});
+
+it("still routes a binary analyze target without an integrity policy", async () => {
+  // The option carries a default, so the refusal above must key off the value
+  // rather than the flag's presence, or every binary analyze would be refused.
+  await expect(run(["analyze", "unused.bin"])).rejects.toMatchObject({
+    code: 1,
+    stdout: expect.stringContaining("target does not exist"),
+  });
+});
