@@ -47,5 +47,6 @@
     "readme": "README_id.md",
     "dir": "ltr"
   },
-  { "code": "it", "name": "Italiano", "readme": "README_it.md", "dir": "ltr" }
+  { "code": "it", "name": "Italiano", "readme": "README_it.md", "dir": "ltr" },
+  { "code": "bn", "name": "বাংলা", "readme": "README_bn.md", "dir": "ltr" }
 ]
