@@ -252,9 +252,9 @@ export class WindowsOwnedProcess extends EventEmitter {
     }
   }
 
-  #schedule(): void {
+  #schedule(delay = 25): void {
     if (this.#closed || this.#timer !== undefined) return;
-    this.#timer = setTimeout(() => this.#poll(), 25);
+    this.#timer = setTimeout(() => this.#poll(), delay);
   }
 
   #poll(): void {
@@ -275,6 +275,10 @@ export class WindowsOwnedProcess extends EventEmitter {
         state = limited;
       }
       this.#failure = undefined;
+      // Drain while the child produces: a poll that returned data is
+      // followed immediately instead of after the idle delay, so capture
+      // runs at pipe speed rather than one chunk per 25ms.
+      const idle = state.stdout.length === 0 && state.stderr.length === 0;
       if (state.stdout.length > 0) this.stdout.write(state.stdout);
       if (state.stderr.length > 0) this.stderr.write(state.stderr);
       if (state.exitCode !== null && this.exitCode === null) {
@@ -288,7 +292,7 @@ export class WindowsOwnedProcess extends EventEmitter {
         state.activeProcesses === 0
       ) {
         this.#release();
-      } else this.#schedule();
+      } else this.#schedule(idle ? 25 : 0);
     } catch (cause: unknown) {
       const failure = cause instanceof Error ? cause : new Error(String(cause));
       this.#failure = failure.message;
