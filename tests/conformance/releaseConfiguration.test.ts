@@ -3,11 +3,27 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 import { SUPPORTED_NODE_VERSION_RANGE } from "../../src/domain/runtimeVersion.js";
+import { MCP_STARTUP_POLICY } from "../../src/mcpStartupPolicy.js";
 
 const readJson = async (path: string): Promise<unknown> =>
   JSON.parse(await readFile(path, "utf8")) as unknown;
 
-const versionedDocumentation = ["docs/installation.md"] as const;
+// Each file lists a fragment of every example Release Please must keep
+// current, so a lost marker is caught as well as a stale version.
+const versionedDocumentation = [
+  {
+    path: "docs/installation.md",
+    examples: ["doctor --provider ghidra --json", '"command": "npx"'],
+  },
+] as const;
+const pluginManifests = [
+  ".claude-plugin/plugin.json",
+  ".codex-plugin/plugin.json",
+] as const;
+const cursorPluginFiles = [
+  ".cursor-plugin/plugin.json",
+  ".cursor-plugin/mcp.json",
+] as const;
 
 describe("release configuration", () => {
   it("keeps doctor and setup runtime support aligned with package engines", async () => {
@@ -24,7 +40,7 @@ describe("release configuration", () => {
       packages: {
         ".": {
           "extra-files": [
-            ...versionedDocumentation.map((path) => ({
+            ...versionedDocumentation.map(({ path }) => ({
               type: "generic",
               path,
             })),
@@ -42,6 +58,23 @@ describe("release configuration", () => {
               path: "server.json",
               jsonpath: "$.packages[0].version",
             },
+            ...pluginManifests.flatMap((path) =>
+              ["$.version", "$.mcpServers.rea.args[1]"].map((jsonpath) => ({
+                type: "json",
+                path,
+                jsonpath,
+              })),
+            ),
+            {
+              type: "json",
+              path: ".cursor-plugin/plugin.json",
+              jsonpath: "$.version",
+            },
+            {
+              type: "json",
+              path: ".cursor-plugin/mcp.json",
+              jsonpath: "$.mcpServers.rea.args[1]",
+            },
           ],
         },
       },
@@ -49,18 +82,27 @@ describe("release configuration", () => {
   });
 
   it.each(versionedDocumentation)(
-    "marks the versioned package example in %s",
-    async (path) => {
+    "marks every versioned package example in $path",
+    async ({ path, examples }) => {
       const content = await readFile(path, "utf8");
       const packageJson = (await readJson("package.json")) as {
         version: string;
       };
-      const versionBlock =
-        /<!-- x-release-please-start-version -->[\s\S]*?<!-- x-release-please-end -->/u.exec(
-          content,
-        )?.[0];
+      const versionBlocks = [
+        ...content.matchAll(
+          /<!-- x-release-please-start-version -->[\s\S]*?<!-- x-release-please-end -->/gu,
+        ),
+      ].map(([block]) => block);
 
-      expect(versionBlock).toContain(`rea-agents@${packageJson.version}`);
+      for (const example of examples)
+        expect(
+          versionBlocks.filter((block) => block.includes(example)),
+          example,
+        ).toHaveLength(1);
+      for (const block of versionBlocks)
+        expect(block.match(/rea-agents@[^\s"`]+/gu)).toEqual([
+          `rea-agents@${packageJson.version}`,
+        ]);
     },
   );
 
@@ -117,6 +159,92 @@ describe("release configuration", () => {
           packageArguments: [{ type: "positional", value: "mcp" }],
         },
       ],
+    });
+  });
+});
+
+describe("plugin manifests", () => {
+  it.each(pluginManifests)(
+    "pins the plugin manifest %s and its server launch to the package version",
+    async (path) => {
+      const packageJson = (await readJson("package.json")) as {
+        name: string;
+        version: string;
+      };
+
+      expect(await readJson(path)).toMatchObject({
+        version: packageJson.version,
+        mcpServers: {
+          rea: {
+            command: "npx",
+            args: ["-y", `${packageJson.name}@${packageJson.version}`, "mcp"],
+          },
+        },
+      });
+    },
+  );
+
+  it("pins the Cursor plugin and the server file its manifest names to the package version", async () => {
+    const packageJson = (await readJson("package.json")) as {
+      name: string;
+      version: string;
+    };
+
+    expect(await readJson(".cursor-plugin/plugin.json")).toMatchObject({
+      name: "rea",
+      version: packageJson.version,
+      mcpServers: "./.cursor-plugin/mcp.json",
+    });
+    expect(await readJson(".cursor-plugin/mcp.json")).toEqual({
+      mcpServers: {
+        rea: {
+          command: "npx",
+          args: ["-y", `${packageJson.name}@${packageJson.version}`, "mcp"],
+        },
+      },
+    });
+  });
+
+  it.each([...pluginManifests, ...cursorPluginFiles])(
+    "stores %s in the form Release Please rewrites it to",
+    async (path) => {
+      // Release Please reserializes JSON extra-files, so any other layout
+      // would change formatting in every release PR.
+      const content = await readFile(path, "utf8");
+
+      expect(content).toBe(`${JSON.stringify(JSON.parse(content), null, 2)}
+`);
+    },
+  );
+
+  it("declares the interface fields Codex plugin validation requires", async () => {
+    const manifest = (await readJson(".codex-plugin/plugin.json")) as {
+      interface: Record<string, unknown>;
+    };
+
+    for (const field of [
+      "displayName",
+      "shortDescription",
+      "longDescription",
+      "developerName",
+      "category",
+    ])
+      expect(manifest.interface[field]).toEqual(expect.stringMatching(/\S/u));
+    expect(manifest.interface.capabilities).toEqual(
+      expect.arrayContaining([expect.stringMatching(/\S/u)]),
+    );
+    expect(manifest.interface.defaultPrompt).toEqual(
+      expect.arrayContaining([expect.stringMatching(/\S/u)]),
+    );
+  });
+
+  it("carries the owned Codex startup timeout in the Codex plugin server entry", async () => {
+    expect(await readJson(".codex-plugin/plugin.json")).toMatchObject({
+      mcpServers: {
+        rea: {
+          startup_timeout_sec: MCP_STARTUP_POLICY.codexStartupTimeoutSeconds,
+        },
+      },
     });
   });
 });

@@ -4,6 +4,23 @@ import { z } from "zod";
 const shaSchema = z.string().regex(/^[a-f0-9]{40}$/u);
 const versionSchema = z.object({ version: z.string() });
 const manifestSchema = z.object({ ".": z.string() });
+const PLUGIN_VERSION_PATHS = [
+  ".claude-plugin/plugin.json",
+  ".codex-plugin/plugin.json",
+  ".cursor-plugin/plugin.json",
+];
+// Cursor reads its server entry from a separate file beside the manifest.
+const PLUGIN_LAUNCH_PATHS = [
+  ".claude-plugin/plugin.json",
+  ".codex-plugin/plugin.json",
+  ".cursor-plugin/mcp.json",
+];
+const PLUGIN_PACKAGE_NAME = "rea-agents";
+const pluginLaunchSchema = z.object({
+  mcpServers: z.object({
+    rea: z.object({ args: z.array(z.string()) }),
+  }),
+});
 const sectionsSchema = z.object({
   versioning: z.string().optional(),
   "changelog-sections": z.array(
@@ -189,6 +206,19 @@ async function validateCandidate(git, sha, version, commits) {
     ["server.json", server.version],
     ["server.json rea-agents package", npmPackage.version],
   );
+  // A stale manifest keeps the previous plugin cache key or launches the
+  // previous server, so both are version authority like server.json.
+  const launches = [];
+  for (const path of PLUGIN_VERSION_PATHS) {
+    versions.push([
+      path,
+      (await readJson(git, sha, path, versionSchema)).version,
+    ]);
+  }
+  for (const path of PLUGIN_LAUNCH_PATHS) {
+    const launch = await readJson(git, sha, path, pluginLaunchSchema);
+    launches.push([path, launch.mcpServers.rea.args[1]]);
+  }
   // Catalogs are generated and checked from this candidate by the release job;
   // they are not version authority stored in the immutable source tree.
   const generated = await git([
@@ -207,6 +237,16 @@ async function validateCandidate(git, sha, version, commits) {
     if (actual !== version) {
       throw new Error(
         `${location}@${sha} declares ${actual}; release branch requires ${version}.`,
+      );
+    }
+  }
+  // Compare the whole specifier: a bare version would make npx fetch a
+  // package named after the release number.
+  const requiredLaunch = `${PLUGIN_PACKAGE_NAME}@${version}`;
+  for (const [location, launched] of launches) {
+    if (launched !== requiredLaunch) {
+      throw new Error(
+        `${location}@${sha} launches ${launched ?? "no package"}; release branch requires ${requiredLaunch}.`,
       );
     }
   }
