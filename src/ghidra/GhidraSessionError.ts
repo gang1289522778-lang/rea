@@ -259,8 +259,10 @@ const causeLaunchOutcome = (
       truncated,
       ...(truncated
         ? {
-            stdout_bytes: Buffer.byteLength(output.stdout),
-            stderr_bytes: Buffer.byteLength(output.stderr),
+            stdout_bytes:
+              output.stdout_bytes ?? Buffer.byteLength(output.stdout),
+            stderr_bytes:
+              output.stderr_bytes ?? Buffer.byteLength(output.stderr),
           }
         : {}),
       ...(output.exit_code === undefined

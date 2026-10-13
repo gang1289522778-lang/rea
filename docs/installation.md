@@ -199,6 +199,12 @@ non-TTY, and JSON modes without applying configuration changes.
 
 ## Released package and main
 
+For a Windows x64 directory with its own Node runtime and production
+dependencies, see [Windows portable preparation](portable-windows.md). The
+preparation machine needs the development toolchain; the resulting directory
+starts without npm on the destination machine. External analysis engines remain
+separate prerequisites.
+
 Repository main documents its current code and generated catalog. `@latest`
 selects the npm release, and persistent MCP registrations are pinned to the
 version that performed setup. Installing newer instructions does not update a
@@ -564,10 +570,12 @@ project remains under the selected temporary directory. If its Unix socket
 pathname would exceed the host's byte limit, REA allocates a separate owner-only
 socket directory under `/tmp` and removes it on close, cancellation, or failure.
 Diagnostics retain the actual endpoint and both owned directories.
-On Linux and macOS, REA starts the inspected JVM directly using Ghidra's own LaunchSupport
-configuration. Apple platform shell wrappers hide their environments from
-ownership inspection, so retaining those wrappers would prevent verified
-process-group cancellation during startup.
+On Windows, Linux, and macOS, REA reads Ghidra's release configuration through
+`LaunchSupport.jar` and starts the inspected JVM directly. JVM properties and
+analysis paths travel as separate arguments. This preserves literal Windows
+paths and allows process ownership inspection on macOS, where shell wrappers
+hide their environments and prevent verified process-group cancellation during
+startup.
 If ownership remains unverifiable, it reports the reason and retains the process
 supervisor and private runtime instead of removing files beneath a live provider.
 The experimental Windows transport uses authenticated IPv4 loopback with a
@@ -696,12 +704,11 @@ have produced.
 ### Ghidra heap and CPU controls
 
 Set resource controls in the environment that launches the CLI or MCP server,
-before opening a new Ghidra session. On Linux and macOS, REA chooses the first
-nonempty setting in this order: `GHIDRA_HEADLESS_MAXMEM`, `GHIDRA_MAXMEM`, then
-`2G`. The chosen value becomes the JVM's `-Xmx` argument. Use a JVM heap-size
-value such as `512M` or `2G`; an invalid value causes Java startup to fail.
-The supported Ghidra 12.1.4 Windows headless script consumes the same settings
-with the same precedence.
+before opening a new Ghidra session. On Windows, Linux, and macOS, REA chooses
+the first nonempty setting in this order: `GHIDRA_HEADLESS_MAXMEM`,
+`GHIDRA_MAXMEM`, then `2G`. The chosen value becomes the JVM's `-Xmx` argument.
+Use a JVM heap-size value such as `512M` or `2G`; an invalid value causes Java
+startup to fail.
 
 For a small target on a constrained host:
 
@@ -723,18 +730,19 @@ heap, or total memory used by the process family. The startup deadline controls
 waiting time independently of these memory settings.
 
 REA clears `_JAVA_OPTIONS`, `JAVA_TOOL_OPTIONS`, `JDK_JAVA_OPTIONS`, and
-`GHIDRA_JAVA_OPTIONS` inherited from the caller, and owns
-`GHIDRA_HEADLESS_JAVA_OPTIONS`. Custom flags injected through these variables
-are not supported configuration. On Windows, REA replaces `JDK_JAVA_OPTIONS`
-with its own isolated home/temp settings and `-XX:-UsePerfData`; on Linux and
-macOS it supplies isolated paths directly to Java. Use the supported heap
-settings above instead of adding a second `-Xmx` through an injection variable.
+`GHIDRA_JAVA_OPTIONS` inherited from the caller, and clears
+`GHIDRA_HEADLESS_JAVA_OPTIONS` for the launch. Custom flags injected through these
+variables are not supported configuration. On every supported host, REA passes
+session-owned `-Duser.home`, `-Djava.io.tmpdir`, `-Dapplication.settingsdir`,
+`-Dapplication.cachedir`, and `-Dapplication.tempdir` properties directly to
+Java, after the release-configured JVM arguments. Windows also receives
+`-XX:-UsePerfData`. Use the supported heap settings above instead of adding a
+second `-Xmx` through an injection variable.
 
-The Linux/macOS launch sets `-XX:ParallelGCThreads=2` and
-`-XX:CICompilerCount=2`; the supported Windows headless script also sets these
-counts. These constrain particular JVM thread pools, not all analysis threads
-or CPU usage. REA does not pass Ghidra's `-max-cpu` option or expose a general
-Ghidra CPU limit. When needed, apply host CPU affinity and scheduling controls
+REA passes `-XX:ParallelGCThreads=2` and `-XX:CICompilerCount=2` directly to Java
+on every supported host. These constrain particular JVM thread pools, not all
+analysis threads or CPU usage. REA does not pass Ghidra's `-max-cpu` option or
+expose a general Ghidra CPU limit. When needed, apply host CPU affinity and scheduling controls
 to the REA process and verify the resulting JVM's affinity. Select CPUs allowed
 on the host; do not assume CPU numbers from another machine are valid.
 

@@ -2,7 +2,27 @@ import { afterEach, expect, it, vi } from "vitest";
 import { ProviderStartupDeadline } from "./ProviderDeadline.js";
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
+});
+
+it("rechecks the monotonic deadline when a timer fires early", async () => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  const now = vi.spyOn(performance, "now").mockReturnValue(0);
+  const deadline = new ProviderStartupDeadline(40);
+  try {
+    const waiting = deadline.wait(500);
+    now.mockReturnValue(39.5);
+    await vi.advanceTimersByTimeAsync(40);
+    expect(deadline.signal.aborted).toBe(false);
+    expect(deadline.interruption).toBeUndefined();
+    now.mockReturnValue(40);
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(waiting).resolves.toBe("aborted");
+    expect(deadline.remainingMs()).toBe(0);
+  } finally {
+    deadline.dispose();
+  }
 });
 
 it("keeps remaining time and cancellation classification stable across wall-clock jumps", () => {

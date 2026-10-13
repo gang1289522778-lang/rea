@@ -152,11 +152,15 @@ can admit it. The reader refuses concurrent writers and verifies its opened
 object's private DACL. The random 256-bit bearer token stays in the private,
 immutable session descriptor and is redacted from diagnostic output.
 
-The batch launcher uses an absolute `cmd.exe`, fixed switches, delayed
-expansion disabled, and quoted tokens. Command-interpreter metacharacters in
-launch paths are unsupported. JVM home and temporary properties use quoted
-`JDK_JAVA_OPTIONS`, preserving spaces. `APPDATA` and `LOCALAPPDATA` point into
-the private runtime, isolating Ghidra preferences, logs, and caches.
+REA reads the selected release's configuration through `LaunchSupport.jar`,
+then starts the inspected JVM directly. Installation, bridge and runtime paths
+travel as separate arguments, preserving spaces, Unicode and literal `%`, `!`
+and `&` without command-interpreter expansion. JVM home and temporary properties
+also travel as separate arguments. `APPDATA` and `LOCALAPPDATA` point into the
+private runtime, isolating Ghidra preferences, logs, and caches. Session-owned
+`application.settingsdir`, `application.cachedir`, and `application.tempdir`
+properties take precedence over shared directory overrides in `launch.properties`;
+the Ghidra installation itself is left unchanged.
 
 Process creation assigns a suspended child atomically to an owned Job Object.
 Membership and kill-on-owner-close policy are verified before resume.

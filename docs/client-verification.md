@@ -265,7 +265,9 @@ MCP SDK transport tests with recording providers remain integration tests.
 They are useful for schema drift and failure projection but do not prove that
 Hopper, Ghidra or another substituted engine works. `verify:package` proves
 packaging/install behavior and fake-provider integration; use the corresponding
-real-provider lanes for engine claims. Packed-bridge checks verify shipped files and Python syntax.
+real-provider lanes for engine claims. The command selects the Windows package
+verifier on Windows and the POSIX verifier elsewhere; `verify:package:windows`
+remains the explicit Windows entry point. Packed-bridge checks verify shipped files and Python syntax.
 Real Apple dispatch and Interface
 Builder verifiers currently prove format integration through production readers.
 

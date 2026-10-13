@@ -9,6 +9,7 @@ import {
   type GhidraLaunchSession,
 } from "./GhidraLauncher.js";
 import { bindGhidraSessionFailure } from "./GhidraSessionError.js";
+import { spawnOwnedProviderProcess } from "../process/ProviderProcess.js";
 
 // The POSIX `bin/java` fixture cannot execute on Windows (extensionless sh script
 // handed to execFile), so these tests only run on POSIX hosts.
@@ -43,6 +44,8 @@ const probeLauncher = (javaHome: string, runtimeRoot: string) =>
     platform: "darwin",
     analyzeHeadlessPath: join(runtimeRoot, "support", "analyzeHeadless"),
     javaHome,
+    spawnProbe: (options) =>
+      spawnOwnedProviderProcess({ ...options, expectedCommand: null }),
     bridgeScriptPath: join(runtimeRoot, "bridge", "ReaGhidraBridge.java"),
   });
 

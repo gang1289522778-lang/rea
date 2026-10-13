@@ -28,6 +28,7 @@ import {
   isGhidraPspTarget,
 } from "./GhidraPspProfile.js";
 import { resolveGhidraPspExtension } from "./GhidraPspExtension.js";
+
 import {
   NATIVE_AOT_MAX_REPORT_BYTES,
   NATIVE_AOT_MAX_SOURCE_BYTES,
@@ -35,6 +36,10 @@ import {
   NATIVE_AOT_MAX_WORK_UNITS,
   NATIVE_AOT_PROFILE_CONTRACT_REVISION,
 } from "../domain/native/nativeAotPe.js";
+
+// Cache identity for direct inspected-JVM launch with session-owned settings,
+// cache and temporary directories. Keep both target branches on this revision.
+const PROCESS_LAUNCH = "inspected-jvm-launch-support-v2";
 
 /**
  * The processor language REA pins for this target, or undefined when Ghidra may
@@ -132,10 +137,7 @@ export const resolveGhidraAnalysisProfile = async (
             installation.platform === "win32"
               ? "disabled-windows-p0"
               : "returning-imports-decoded-return-v2",
-          process_launch:
-            installation.platform === "win32"
-              ? "official-headless-script-v1"
-              : "inspected-jvm-launch-support-v1",
+          process_launch: PROCESS_LAUNCH,
           load_image_evidence: "independent-raw-mapping-context-v4",
           jump_table_evidence: "typed-case-default-blocks-v1",
           decompiler_jump_loads: true,
@@ -223,10 +225,7 @@ export const resolveGhidraAnalysisProfile = async (
           installation.platform === "win32"
             ? "disabled-windows-p0"
             : "returning-imports-decoded-return-v2",
-        process_launch:
-          installation.platform === "win32"
-            ? "official-headless-script-v1"
-            : "inspected-jvm-launch-support-v1",
+        process_launch: PROCESS_LAUNCH,
         ...(dos
           ? {
               load_image_evidence: dosCom

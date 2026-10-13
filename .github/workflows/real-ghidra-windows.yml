@@ -64,6 +64,15 @@ jobs:
         env:
           REA_ANALYSIS_PROVIDER: ghidra
         run: npm run verify:ghidra:windows -- --x86 | Tee-Object -FilePath windows-ghidra-x86-proof.log
+      - name: Verify a JDK discovered only through PATH
+        shell: pwsh
+        run: |
+          if ($env:JAVA_HOME) {
+            $env:PATH = (Join-Path $env:JAVA_HOME 'bin') + [IO.Path]::PathSeparator + $env:PATH
+          }
+          Remove-Item Env:JAVA_HOME -ErrorAction SilentlyContinue
+          node scripts/verify-real-ghidra-windows.mjs | Tee-Object -FilePath windows-ghidra-path-jdk-proof.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Verify native x64 DLL Windows Ghidra operations
         env:
           REA_ANALYSIS_PROVIDER: ghidra
@@ -96,6 +105,7 @@ jobs:
             windows-ghidra-proof.log
             windows-ghidra-package-proof.log
             windows-ghidra-x86-proof.log
+            windows-ghidra-path-jdk-proof.log
             windows-ghidra-x86-package-proof.log
             windows-ghidra-dll-proof.log
             windows-ghidra-x86-dll-proof.log

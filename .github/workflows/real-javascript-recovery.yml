@@ -36,7 +36,8 @@ jobs:
         shell: bash
         run: |
           mkdir -p "$RUNNER_TEMP/rea-wakaru"
-          curl --fail --location --retry 3 https://github.com/pionxzh/wakaru/releases/download/v1.14.0/wakaru-linux-x64.tar.gz -o "$RUNNER_TEMP/rea-wakaru/release.tar.gz"
+          # Space retries across transient release-host outages, with bounded requests.
+          curl --fail --location --retry 5 --retry-delay 15 --retry-max-time 180 --connect-timeout 15 --max-time 120 https://github.com/pionxzh/wakaru/releases/download/v1.14.0/wakaru-linux-x64.tar.gz -o "$RUNNER_TEMP/rea-wakaru/release.tar.gz"
           tar -xzf "$RUNNER_TEMP/rea-wakaru/release.tar.gz" -C "$RUNNER_TEMP/rea-wakaru" wakaru
           printf '%s  %s\n' 664fa06782a61eda7ed15885134b52525fd565dd77607e642062ceb6cd927c38 "$RUNNER_TEMP/rea-wakaru/wakaru" | sha256sum --check
       - name: Install isolated fixture compilers

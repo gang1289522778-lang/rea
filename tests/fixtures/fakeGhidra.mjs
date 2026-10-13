@@ -58,7 +58,10 @@ else {
     server.listen(0, "127.0.0.1", async () => {
       const address = server.address();
       if (address === null || typeof address === "string") process.exit(65);
-      const pending = `${endpointPath}.pending`;
+      // Match the real bridge: Windows private runtimes forbid renames.
+      // Closing the new writer publishes the complete endpoint for admission.
+      const pending =
+        process.platform === "win32" ? endpointPath : `${endpointPath}.pending`;
       await writeFile(
         pending,
         `${JSON.stringify({
@@ -67,7 +70,7 @@ else {
         })}\n`,
         { flag: "wx" },
       );
-      await rename(pending, endpointPath);
+      if (process.platform !== "win32") await rename(pending, endpointPath);
     });
   }
 }

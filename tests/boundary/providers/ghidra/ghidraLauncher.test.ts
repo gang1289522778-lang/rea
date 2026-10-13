@@ -1,35 +1,20 @@
-import {
-  access,
-  chmod,
-  mkdir,
-  readFile,
-  stat,
-  writeFile,
-} from "node:fs/promises";
+import { access, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join, posix, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { createTestTempDirectory } from "../../../fixtures/temporaryDirectory.js";
 import { createGhidraTestRuntime } from "../../../fixtures/ghidraRuntime.js";
 import type { PrivateRuntimeRoot } from "../../../../src/process/PrivateRuntimeRoot.js";
+import * as ghidraJavaLaunchModule from "../../../../src/ghidra/GhidraJavaLaunch.js";
 
 import {
   ghidraHeadlessArguments,
-  ghidraHeadlessCommand,
   GhidraHeadlessLauncher,
 } from "../../../../src/ghidra/GhidraLauncher.js";
 
-const fixturePath = fileURLToPath(
-  new URL(
-    process.platform === "win32"
-      ? "../../../fixtures/captureGhidraLaunch.cmd"
-      : "../../../fixtures/captureGhidraLaunch.mjs",
-    import.meta.url,
-  ),
-);
 const runtimes: PrivateRuntimeRoot[] = [];
 
 const launchCaptureSchema = z.object({
@@ -72,10 +57,7 @@ const expectIsolatedEnvironment = (
     XDG_DATA_HOME: join(runtimeRoot, "data"),
     GHIDRA_JAVA_OPTIONS: "",
     JAVA_TOOL_OPTIONS: "",
-    JDK_JAVA_OPTIONS:
-      process.platform === "win32"
-        ? `"-Duser.home=${join(runtimeRoot, "home")}" "-Djava.io.tmpdir=${join(runtimeRoot, "tmp")}" "-XX:-UsePerfData"`
-        : "",
+    JDK_JAVA_OPTIONS: "",
     _JAVA_OPTIONS: "",
     JAVA_HOME: javaHome,
     REA_PROCESS_RUN_ID: "d6fcbb66-e829-4ff6-a535-0035aec63139",
@@ -85,11 +67,9 @@ const expectIsolatedEnvironment = (
   );
 };
 
-beforeAll(async () => {
-  if (process.platform !== "win32") await chmod(fixturePath, 0o755);
-});
 afterEach(async () => {
   vi.unstubAllEnvs();
+  vi.restoreAllMocks();
   await Promise.all(runtimes.splice(0).map((runtime) => runtime.close()));
 });
 
@@ -442,51 +422,9 @@ describe("Ghidra Windows launcher", () => {
     expect(args).not.toContain("/package/bridge/ReaGhidraNoReturnFix.java");
     expect(args).toContain("/package/bridge/ReaGhidraBridge.java");
   });
+});
 
-  it("wraps the Windows batch launcher without enabling a Node shell", () => {
-    const command = ghidraHeadlessCommand({
-      environment: {},
-      platform: "win32",
-      analyzeHeadlessPath:
-        "C:\\Program Files\\Ghidra 12.1.4\\support\\analyzeHeadless.bat",
-      arguments: [
-        "C:\\REA Runtime\\project",
-        "rea-project",
-        "-import",
-        "C:\\REA Runtime\\target.exe",
-      ],
-      comSpec: "C:\\Windows\\System32\\cmd.exe",
-    });
-
-    expect(command).toEqual({
-      command: "C:\\Windows\\System32\\cmd.exe",
-      arguments: [
-        "/d",
-        "/e:on",
-        "/v:off",
-        "/s",
-        "/c",
-        '""C:\\Program Files\\Ghidra 12.1.4\\support\\analyzeHeadless.bat" "C:\\REA Runtime\\project" "rea-project" "-import" "C:\\REA Runtime\\target.exe""',
-      ],
-    });
-  });
-
-  it.each([
-    "C:\\targets\\%TEMP%\\fixture.exe",
-    "C:\\targets\\fixture & calc.exe",
-    'C:\\targets\\fixture".exe',
-  ])("rejects a Windows command-interpreter path: %s", (targetPath) => {
-    expect(() =>
-      ghidraHeadlessCommand({
-        environment: {},
-        platform: "win32",
-        analyzeHeadlessPath: "C:\\Ghidra\\support\\analyzeHeadless.bat",
-        arguments: ["-import", targetPath],
-        comSpec: "C:\\Windows\\System32\\cmd.exe",
-      }),
-    ).toThrow(/metacharacters/u);
-  });
-
+describe("Ghidra Windows release configuration", () => {
   it.skipIf(process.platform !== "win32").each([
     {
       properties:
@@ -509,6 +447,13 @@ describe("Ghidra Windows launcher", () => {
       }
       const runtime = await createGhidraTestRuntime(parent);
       runtimes.push(runtime);
+      vi.spyOn(ghidraJavaLaunchModule, "ghidraJavaLaunch").mockImplementation(
+        async (options) => ({
+          command: process.execPath,
+          arguments: options.arguments,
+          environment: options.environment,
+        }),
+      );
       const spawnProcess = vi.fn(async () => {
         throw new Error("fixture stops before process creation");
       });
@@ -544,9 +489,11 @@ describe("Ghidra Windows launcher", () => {
       ).toBe(true);
     },
   );
+});
 
+describe("Ghidra Windows launcher process ownership", () => {
   it.skipIf(process.platform !== "win32")(
-    "keeps authority in a private descriptor and isolates Ghidra state through the batch launcher",
+    "preserves portable bridge paths through the direct JVM launch and retains private process ownership",
     async () => {
       vi.stubEnv("GHIDRA_JAVA_OPTIONS", "-javaagent:/unapproved/agent.jar");
       vi.stubEnv("JAVA_TOOL_OPTIONS", "-Duser.home=/unapproved/home");
@@ -558,15 +505,32 @@ describe("Ghidra Windows launcher", () => {
       const runtimeRoot = runtime.path;
       const token = "secret-token-that-must-not-leak";
       const javaHome = "C:\\Java\\jdk-21";
+      const bridgeScriptPath =
+        "E:\\rea %PATH% & !NAME! 中文\\bridge\\ReaGhidraBridge.java";
+      // Capture the real owned-process boundary without requiring a JDK here.
+      // The packaged Ghidra verifier separately exercises the actual JVM.
+      const javaLaunch = vi
+        .spyOn(ghidraJavaLaunchModule, "ghidraJavaLaunch")
+        .mockImplementation(async (options) => ({
+          command: process.execPath,
+          arguments: [
+            fileURLToPath(
+              new URL(
+                "../../../fixtures/captureGhidraLaunch.mjs",
+                import.meta.url,
+              ),
+            ),
+            ...options.arguments,
+          ],
+          environment: options.environment,
+        }));
       const launcher = new GhidraHeadlessLauncher({
         // Select the fixture's Node PATH and injected JVM options explicitly.
         environment: process.env,
-        analyzeHeadlessPath: fixturePath,
-        // POSIX follows the real inspected-JVM route; Windows uses the official
-        // batch script because its launcher contract differs.
+        analyzeHeadlessPath: "C:\\Ghidra\\support\\analyzeHeadless.bat",
         platform: "win32",
         javaHome,
-        bridgeScriptPath: "/package/bridge/ReaGhidraBridge.java",
+        bridgeScriptPath,
       });
       const launched = await launcher.launch({
         runtimeRoot,
@@ -596,12 +560,10 @@ describe("Ghidra Windows launcher", () => {
           ...(process.platform === "win32" ? {} : { descriptor_mode: 0o600 }),
           descriptor_has_token: true,
         });
+        expect(javaLaunch).toHaveBeenCalledOnce();
+        expect(capture.arguments).toContain(bridgeScriptPath);
         expectIsolatedEnvironment(capture.environment, runtimeRoot, javaHome);
         expect(capture.environment.GHIDRA_HEADLESS_JAVA_OPTIONS).toBe("");
-        if (process.platform !== "win32")
-          expect(
-            (await stat(join(runtimeRoot, "ownership.json"))).mode & 0o777,
-          ).toBe(0o600);
       } finally {
         const cleaned = await launched.value.cleanup?.();
         expect(cleaned).toMatchObject({ cleaned: true });

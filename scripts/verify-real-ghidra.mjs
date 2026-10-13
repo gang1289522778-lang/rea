@@ -491,9 +491,8 @@ async function verifyTarget(targetPath, variant, expectedTarget = null) {
     launcher: new GhidraHeadlessLauncher({
       environment: process.env,
       analyzeHeadlessPath: installation.analyzeHeadlessPath,
-      ...(process.env.JAVA_HOME === undefined
-        ? {}
-        : { javaHome: process.env.JAVA_HOME }),
+      javaHome: installation.javaHome,
+      javaVmName: installation.javaVmName,
       bridgeScriptPath: fileURLToPath(
         new URL("../bridge/ghidra/ReaGhidraBridge.java", import.meta.url),
       ),

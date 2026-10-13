@@ -61,13 +61,20 @@ export class ProviderStartupDeadline {
       return;
     }
     signal?.addEventListener("abort", this.#onExternalAbort, { once: true });
-    this.#timer = setTimeout(() => {
+    const checkDeadline = (): void => {
       if (this.#controller.signal.aborted) return;
+      // Timer delivery can precede the high-resolution monotonic deadline.
+      const remaining = this.remainingMs();
+      if (remaining > 0) {
+        this.#timer = setTimeout(checkDeadline, remaining);
+        return;
+      }
       this.#interruption = "timeout";
       this.#abort(
         new DOMException("Provider startup deadline elapsed", "TimeoutError"),
       );
-    }, timeoutMs);
+    };
+    this.#timer = setTimeout(checkDeadline, timeoutMs);
   }
 
   /** Composite signal aborted by either the caller or the absolute deadline. */
@@ -90,10 +97,7 @@ export class ProviderStartupDeadline {
 
   /** Wait for at most one polling interval under the shared deadline signal. */
   wait(milliseconds: number): Promise<AbortableWaitResult> {
-    return waitForAbortableDelay(
-      Math.min(milliseconds, this.remainingMs()),
-      this.signal,
-    );
+    return waitForAbortableDelay(milliseconds, this.signal);
   }
 
   /** Release the deadline timer and external abort listener. */

@@ -10,7 +10,7 @@ const state = vi.hoisted(() => ({
   rejectRemove: false,
   removeCopiedRecovery: false,
   initialCleanupFailure: undefined as unknown,
-  readbackCleanupFailure: undefined as unknown,
+  readbackCleanupFailure: undefined as (() => Promise<unknown>) | undefined,
 }));
 
 afterEach(() => {
@@ -78,16 +78,18 @@ vi.mock("../../src/application/RegularFileRead.js", async (importOriginal) => {
     >();
   return {
     ...original,
-    readRegularFileText: (
+    readRegularFileText: async (
       ...arguments_: Parameters<typeof original.readRegularFileText>
-    ) =>
-      state.initialCleanupFailure !== undefined
-        ? Promise.reject(state.initialCleanupFailure)
-        : state.readbackFailed && state.readbackCleanupFailure !== undefined
-          ? Promise.reject(state.readbackCleanupFailure)
-          : state.readbackFailed
-            ? Promise.reject(new Error("injected readback failure"))
-            : original.readRegularFileText(...arguments_),
+    ) => {
+      if (state.initialCleanupFailure !== undefined)
+        throw state.initialCleanupFailure;
+      if (state.readbackFailed) {
+        if (state.readbackCleanupFailure !== undefined)
+          throw await state.readbackCleanupFailure();
+        throw new Error("injected readback failure");
+      }
+      return original.readRegularFileText(...arguments_);
+    },
   };
 });
 
@@ -282,14 +284,18 @@ it("retains readback cleanup ownership when rollback also fails", async () => {
   await import("node:fs/promises").then(({ writeFile }) =>
     writeFile(path, original),
   );
-  const owner = await ownReadHandle(path);
-  const cleanupFailure = new RegularFileCleanupFailure(
-    path,
-    owner,
-    { kind: "completed", value: "" },
-    new Error("injected readback close failure"),
-  );
-  state.readbackCleanupFailure = cleanupFailure;
+  let owner: OwnedFileHandle | undefined;
+  // Readback opens the published file, not the original before replacement.
+  // Holding the original open would make Windows reject the atomic rename.
+  state.readbackCleanupFailure = async () => {
+    owner = await ownReadHandle(path);
+    return new RegularFileCleanupFailure(
+      path,
+      owner,
+      { kind: "completed", value: "" },
+      new Error("injected readback close failure"),
+    );
+  };
   state.rejectRestore = true;
 
   const host = systemSetupHost(
@@ -309,7 +315,10 @@ it("retains readback cleanup ownership when rollback also fails", async () => {
     await host.close?.();
   }
 
-  if (!(caught instanceof ConfigurationError)) throw caught;
+  if (!(caught instanceof ConfigurationError))
+    throw new Error("Expected a configuration failure after readback", {
+      cause: caught,
+    });
   expect(caught.message).toContain("injected restore write failure");
   expect(caught.message).toContain(`${path}.rea.backup`);
   const cleanupOwnerError = caught.cause;

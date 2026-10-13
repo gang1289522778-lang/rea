@@ -1,42 +1,29 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 
-import {
-  GhidraHeadlessLauncher,
-  ghidraHeadlessCommand,
-  ghidraHeadlessJavaOptions,
-} from "./GhidraLauncher.js";
+import * as output from "../process/OwnedCommand.js";
+import type { ProviderProcessSnapshot } from "../process/ProviderProcess.js";
+import { GhidraHeadlessLauncher } from "./GhidraLauncher.js";
+import { ghidraJavaLaunch } from "./GhidraJavaLaunch.js";
 import { ghidraJavaEnvironment } from "./GhidraInstallation.js";
 
-describe("Ghidra headless JVM environment", () => {
-  it("passes Windows paths with spaces to Java's environment parser", () => {
-    expect(
-      ghidraHeadlessJavaOptions(
-        "C:\\REA Runtime\\home",
-        "C:\\REA Runtime\\tmp",
-        "win32",
-      ),
-    ).toEqual({
-      JDK_JAVA_OPTIONS:
-        '"-Duser.home=C:\\REA Runtime\\home" "-Djava.io.tmpdir=C:\\REA Runtime\\tmp" "-XX:-UsePerfData"',
-      GHIDRA_HEADLESS_JAVA_OPTIONS: "",
-    });
-  });
+afterEach(() => vi.restoreAllMocks());
 
-  it.each(["%TEMP%", 'quote"', "amp&", "line\n", "nul\0"])(
-    "rejects interpreter metacharacters in either Windows JVM path: %s",
-    (suffix) => {
-      for (const [home, temp] of [
-        [`C:\\runtime\\${suffix}`, "C:\\runtime\\tmp"],
-        ["C:\\runtime\\home", `C:\\runtime\\${suffix}`],
-      ] as const)
-        expect(() => ghidraHeadlessJavaOptions(home, temp, "win32")).toThrow(
-          /metacharacters/u,
-        );
-    },
-  );
+const probeOutput = (stdout = "", stderr = ""): ProviderProcessSnapshot => ({
+  stdout: {
+    text: stdout,
+    bytes: Buffer.byteLength(stdout),
+    observedBytes: Buffer.byteLength(stdout),
+  },
+  stderr: {
+    text: stderr,
+    bytes: Buffer.byteLength(stderr),
+    observedBytes: Buffer.byteLength(stderr),
+  },
+  exitCode: 0,
+  signal: null,
 });
 
-it("uses selected mixed-case Windows PATH and ComSpec through direct launch boundaries", () => {
+it("preserves selected Windows environment without using ComSpec to encode paths", () => {
   const environment = {
     Path: "C:\\selected\\tools",
     ComSpec: "C:\\selected\\cmd.exe",
@@ -49,25 +36,118 @@ it("uses selected mixed-case Windows PATH and ComSpec through direct launch boun
     bridgeScriptPath: "C:\\rea\\bridge.py",
   });
   environment.ComSpec = "C:\\changed\\cmd.exe";
-  expect(
-    ghidraHeadlessCommand({
-      environment: launcher.options.environment,
-      platform: "win32",
-      analyzeHeadlessPath: launcher.options.analyzeHeadlessPath,
-      arguments: [],
-    }).command,
-  ).toBe("C:\\selected\\cmd.exe");
+  expect(launcher.options.environment.COMSPEC).toBe("C:\\selected\\cmd.exe");
   expect(ghidraJavaEnvironment("C:\\jdk", environment, "win32")).toMatchObject({
     PATH: "C:\\jdk\\bin;C:\\selected\\tools",
     COMSPEC: "C:\\changed\\cmd.exe",
     SYSTEMROOT: "C:\\selected-windows",
   });
-  expect(
-    ghidraHeadlessCommand({
-      environment: { SYSTEMROOT: "C:\\selected-windows" },
-      platform: "win32",
-      analyzeHeadlessPath: launcher.options.analyzeHeadlessPath,
-      arguments: [],
-    }).command,
-  ).toBe("C:\\selected-windows\\System32\\cmd.exe");
 });
+
+it("passes Windows installation, JVM and analysis paths literally through LaunchSupport and direct Java argv", async () => {
+  const execute = vi
+    .spyOn(output, "runOwnedCommand")
+    .mockResolvedValueOnce(probeOutput("GHIDRA_MAXMEM=512m\n"))
+    .mockResolvedValueOnce(probeOutput("-Dfile.encoding=UTF8\n"));
+  const root = "E:\\rea %PATH% & !NAME! 中文";
+  const arguments_ = [
+    "-scriptPath",
+    `${root}\\bridge`,
+    "-postScript",
+    `${root}\\bridge\\ReaGhidraBridge.java`,
+  ];
+  const result = await ghidraJavaLaunch({
+    platform: "win32",
+    analyzeHeadlessPath: `${root}\\ghidra\\support\\analyzeHeadless.bat`,
+    javaHome: `${root}\\jdk`,
+    homeRoot: `${root}\\home`,
+    configRoot: `${root}\\config`,
+    cacheRoot: `${root}\\cache`,
+    tempRoot: `${root}\\tmp`,
+    arguments: arguments_,
+    environment: {},
+    runId: "selected-run",
+    timeoutMs: 1234,
+    onStderr: () => {},
+  });
+  expect(execute).toHaveBeenCalledTimes(2);
+  for (const [spawn, limits] of execute.mock.calls) {
+    expect(spawn).toMatchObject({
+      command: `${root}\\jdk\\bin\\java.exe`,
+      expectedCommand: `${root}\\jdk\\bin\\java.exe`,
+      runId: "selected-run",
+      platform: "win32",
+      hostEnvironment: {},
+    });
+    expect(limits).toEqual({ timeoutMs: 1234, diagnosticBytes: 64 * 1024 });
+    expect(spawn.arguments).toEqual(
+      expect.arrayContaining([
+        `-Duser.home=${root}\\home`,
+        `-Djava.io.tmpdir=${root}\\tmp`,
+        "-XX:-UsePerfData",
+        `${root}\\ghidra\\support\\LaunchSupport.jar`,
+        `${root}\\ghidra`,
+      ]),
+    );
+  }
+  expect(result.command).toBe(`${root}\\jdk\\bin\\java.exe`);
+  expect(result.arguments.slice(-arguments_.length)).toEqual(arguments_);
+  expect(result.arguments).toEqual(
+    expect.arrayContaining([
+      `-Duser.home=${root}\\home`,
+      `-Djava.io.tmpdir=${root}\\tmp`,
+      "-XX:-UsePerfData",
+      "-Xmx512m",
+    ]),
+  );
+});
+
+it.each(["win32", "linux"] as const)(
+  "keeps %s release-configured application directories inside the owned runtime",
+  async (platform) => {
+    vi.spyOn(output, "runOwnedCommand")
+      .mockResolvedValueOnce(probeOutput())
+      .mockResolvedValueOnce(
+        probeOutput(
+          // LaunchSupport emits these properties from the selected installation.
+          [
+            "-Dapplication.settingsdir=/shared/settings",
+            "-Dapplication.cachedir=/shared/cache",
+            "-Dapplication.tempdir=/shared/tmp",
+            "-Dfile.encoding=UTF8",
+          ].join("\n"),
+        ),
+      );
+    const root =
+      platform === "win32" ? "E:\\private runtime" : "/private runtime";
+    const separator = platform === "win32" ? "\\" : "/";
+    const result = await ghidraJavaLaunch({
+      platform,
+      analyzeHeadlessPath: `${root}${separator}ghidra${separator}support${separator}analyzeHeadless`,
+      javaHome: `${root}${separator}jdk`,
+      homeRoot: `${root}${separator}home`,
+      configRoot: `${root}${separator}config`,
+      cacheRoot: `${root}${separator}cache`,
+      tempRoot: `${root}${separator}tmp`,
+      arguments: [],
+      environment: {},
+      runId: "isolated-run",
+      timeoutMs: 1234,
+      onStderr: () => {},
+    });
+    const effective = Object.fromEntries(
+      result.arguments
+        .filter((argument) => argument.startsWith("-D"))
+        .map((argument) => {
+          const separator = argument.indexOf("=");
+          return [argument.slice(2, separator), argument.slice(separator + 1)];
+        }),
+    );
+    expect(effective).toMatchObject({
+      "application.settingsdir": `${root}${separator}config`,
+      "application.cachedir": `${root}${separator}cache`,
+      "application.tempdir": `${root}${separator}tmp`,
+      "file.encoding": "UTF8",
+    });
+  },
+);
