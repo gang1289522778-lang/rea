@@ -120,16 +120,35 @@ export const comparisonLimitations = (
     limitations.push(
       `Both observations cover only the selected declaring types (${left.selection.type_names.join(", ")}); member totals and statuses describe those types, not the whole assembly.`,
     );
-  if (left.exported_types === null || right.exported_types === null)
-    limitations.push(
-      "At least one managed member observation predates ExportedType inspection; its exported and forwarded types are unknown.",
-    );
-  if (
-    (left.exported_types?.length ?? 0) > 0 ||
-    (right.exported_types?.length ?? 0) > 0
-  )
-    limitations.push(
-      "ExportedType rows, including type forwarders, are observed but not compared; an unchanged comparison does not establish an unchanged exported or forwarded type set.",
-    );
+  limitations.push(
+    ...uncomparedInventory(left.exported_types, right.exported_types, {
+      unexamined:
+        "At least one managed member observation predates ExportedType inspection; its exported and forwarded types are unknown.",
+      uncompared:
+        "ExportedType rows, including type forwarders, are observed but not compared; an unchanged comparison does not establish an unchanged exported or forwarded type set.",
+    }),
+    ...uncomparedInventory(left.user_strings, right.user_strings, {
+      unexamined:
+        "At least one managed member observation predates user-string inspection; its ldstr literals are unknown.",
+      uncompared:
+        "ldstr literals are observed but not compared; normalized CIL keeps #US tokens rather than decoded text, so an unchanged method does not establish unchanged string literals.",
+    }),
+  );
   return limitations;
 };
+
+/**
+ * Limitations for an inventory the comparison observes but does not compare:
+ * unknown when either side predates it, and uncompared when either side has
+ * entries.
+ */
+const uncomparedInventory = (
+  left: readonly unknown[] | null,
+  right: readonly unknown[] | null,
+  text: { readonly unexamined: string; readonly uncompared: string },
+): string[] => [
+  ...(left === null || right === null ? [text.unexamined] : []),
+  ...((left?.length ?? 0) > 0 || (right?.length ?? 0) > 0
+    ? [text.uncompared]
+    : []),
+];
