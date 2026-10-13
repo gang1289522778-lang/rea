@@ -537,24 +537,27 @@ describe("function reconstruction admission controls", () => {
     ]);
   });
 
-  it("rejects selected-dimension citations outside comparison closure", () => {
-    const evidence = comparison(singular, {
-      result: jsonValueSchema.parse({
-        ...baselineResult,
-        dimensions: baselineResult.dimensions.map((dimension) =>
-          dimension.dimension === "pseudocode"
-            ? {
-                ...dimension,
-                evidence_links: [left.evidence_id, extra.evidence_id],
-              }
-            : dimension,
-        ),
-      }),
-    });
-    expect(admittedVerification(evidence, [left, right, extra])).toThrow(
-      /dimension cites Evidence outside comparison closure/u,
-    );
-  });
+  it.each(["pseudocode", "overall"])(
+    "rejects nested citations outside comparison closure for %s",
+    (dimension) => {
+      const evidence = comparison(singular, {
+        result: jsonValueSchema.parse({
+          ...baselineResult,
+          dimensions: baselineResult.dimensions.map((dimension) =>
+            dimension.dimension === "pseudocode"
+              ? {
+                  ...dimension,
+                  evidence_links: [left.evidence_id, extra.evidence_id],
+                }
+              : dimension,
+          ),
+        }),
+      });
+      expect(
+        admittedVerification(evidence, [left, right, extra], dimension),
+      ).toThrow(/finding cites Evidence outside its top-level closure/u);
+    },
+  );
 });
 
 describe("function reconstruction evidence integrity", () => {

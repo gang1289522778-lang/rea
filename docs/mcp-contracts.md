@@ -36,6 +36,20 @@ structured data and matching text projection. Oversized errors are retained
 as Evidence before delivery of a bounded diagnostic with an export reference;
 if retention is unavailable or fails, the diagnostic reports that reason.
 
+`compare_functions` compares the `pseudocode` and `assembly` dimensions as
+exact provider text. Their `changed` status establishes a textual difference;
+it does not establish a behavior change. Addresses and generated names are
+not normalized: for example, `FUN_00001010()` and `FUN_00002010()` differ even
+when the same function moved between builds. Both dimensions carry this
+limitation inline. Numeric constants remain part of the exact comparison.
+Reconstruction verification and static/runtime correlation retain limitations
+from the selected function dimension alongside whole-comparison caveats.
+An overall function verification claim includes all dimension limitations.
+The `cfg` dimension separately normalizes block addresses to local block
+indices, so it can remain `unchanged` when text changes. Equal CFGs establish
+only equal observed block sizes and successor relationships, not equivalent
+function behavior. Text from different provider identities remains `unknown`.
+
 `get_call_graph` returns a `graph` keyed by traversal depth and a top-level
 `limitations` array with deduplicated execution caveats. Each node keeps its
 relationship coverage and read-specific `limitations`, alongside observed
