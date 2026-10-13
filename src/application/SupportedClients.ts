@@ -29,6 +29,8 @@ export interface SetupClient {
   /** Same-scope fallback ZCode stops loading after its first native server. */
   readonly zcodeFallbackPath?: string;
   readonly markerPath?: string;
+  /** Product-specific applicability evidence when configuration storage is shared. */
+  readonly discoveryPaths?: readonly string[];
   readonly format?:
     | "json"
     | "toml"
@@ -66,6 +68,7 @@ interface ClientDefinition {
   readonly displayName: string;
   readonly configPath: ClientPath;
   readonly markerPath: ClientPath;
+  readonly discoveryPaths?: (context: ClientPathContext) => readonly string[];
   readonly format: NonNullable<SetupClient["format"]>;
   readonly zcodeFallbackPath?: (context: ClientPathContext) => string;
   readonly skillPath?: ClientPath;
@@ -393,6 +396,15 @@ const devinDirectory = ({ home, platform, env }: ClientPathContext): string =>
     ? join(env.APPDATA ?? join(home, "AppData", "Roaming"), "devin")
     : join(env.XDG_CONFIG_HOME || join(home, ".config"), "devin");
 
+/**
+ * FreeBuff's own profile directory (its `state.json` root, fixed under
+ * `.config` on every platform). The shared `~/.agents` folder is not
+ * FreeBuff-specific: REA's own skill installs create it, so it cannot
+ * prove FreeBuff is installed.
+ */
+const freebuffProfileDirectory = ({ home }: ClientPathContext): string =>
+  join(home, ".config", "freebuff-desktop");
+
 /** Stable product metadata used to derive setup discovery and documentation. */
 export const SUPPORTED_CLIENT_DEFINITIONS = [
   {
@@ -593,6 +605,20 @@ export const SUPPORTED_CLIENT_DEFINITIONS = [
     format: "dsh",
   },
   {
+    name: "freebuff",
+    displayName: "FreeBuff",
+    // FreeBuff discovers personal skills in the shared user agents directory.
+    skillPath: ({ home }: ClientPathContext) => join(home, ".agents", "skills"),
+    // FreeBuff loads MCP servers from the shared user agents directory.
+    configPath: ({ home }: ClientPathContext) =>
+      join(home, ".agents", "mcp.json"),
+    markerPath: freebuffProfileDirectory,
+    discoveryPaths: (context: ClientPathContext) => [
+      freebuffProfileDirectory(context),
+    ],
+    format: "json",
+  },
+  {
     name: "grok_bot",
     displayName: "Grok Bot",
     configPath: grokBotDirectory,
@@ -607,14 +633,19 @@ export const SUPPORTED_CLIENT_DEFINITIONS = [
  * directory override does not exist.
  */
 export const clientEvidencePaths = (
-  client: Pick<SetupClient, "configPath" | "configPaths" | "markerPath">,
+  client: Pick<
+    SetupClient,
+    "configPath" | "configPaths" | "markerPath" | "discoveryPaths"
+  >,
 ): readonly string[] => [
   ...new Set(
-    [
-      client.configPath,
-      ...(client.configPaths ?? []),
-      client.markerPath,
-    ].filter((path): path is string => path !== undefined && path.length > 0),
+    (
+      client.discoveryPaths ?? [
+        client.configPath,
+        ...(client.configPaths ?? []),
+        client.markerPath,
+      ]
+    ).filter((path): path is string => path !== undefined && path.length > 0),
   ),
 ];
 
@@ -676,6 +707,9 @@ export const supportedClients = (
           ? {}
           : { zcodeFallbackPath: definition.zcodeFallbackPath(context) }),
         markerPath: marker.value,
+        ...(definition.discoveryPaths === undefined
+          ? {}
+          : { discoveryPaths: definition.discoveryPaths(context) }),
         format: definition.format,
       };
     } catch (cause: unknown) {

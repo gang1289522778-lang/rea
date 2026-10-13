@@ -287,9 +287,10 @@ hosted connector; see [its configuration](client-configuration.md#other-client-s
 | Trae               | `trae`           |
 | ZCode              | `zcode`          |
 | DeepSeek Harness   | `dsh`            |
+| FreeBuff           | `freebuff`       |
 
-`dsh` is main-only until a release after 6.4.0. The registry check above does
-not cover it.
+`dsh` and `freebuff` are main-only until a release after 6.4.0. The registry
+check above does not cover them.
 
 See [client configuration and troubleshooting](client-configuration.md) for
 configuration paths, profiles, trust policies, and schema-limit workarounds.
