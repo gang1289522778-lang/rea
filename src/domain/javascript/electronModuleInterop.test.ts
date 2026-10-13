@@ -615,6 +615,12 @@ describe("Electron module interop bound mutators", () => {
     'Reflect.set({},"create",...valuesAndReceivers);',
     "Reflect.set({},...keysValuesAndReceivers);",
     'Reflect.set({},"create",customCreate,receiver);',
+    'const change = Object.defineProperty.call; change(null,Object,"create",{value:customCreate});',
+    'const {apply:change} = Object.defineProperty; change(null,[Object,"create",{value:customCreate}]);',
+    'const change = Reflect.apply.call; change(null,Object.defineProperty,null,[Object,"create",{value:customCreate}]);',
+    '(0, Object.defineProperty)(Object,"create",{value:customCreate});',
+    'const change = Object.defineProperty.bind(null,Object,"create"); (0, change)({value:customCreate});',
+    '(0, Reflect.apply)(Object.defineProperty,null,[Object,"create",{value:customCreate}]);',
   ])("rejects intrinsic writes through a bound mutator: %s", (write) => {
     expect(
       analyzeJavaScriptStaticSource(
@@ -641,6 +647,7 @@ describe("Electron module interop bound mutators", () => {
     'const {apply:change} = Object.defineProperty; change.call(Object.defineProperty,null,[metadata,"x",{value:1}]);',
     'Reflect.set(metadata,"x",1,{});',
     'const receiver = {}; Reflect.set({},"x",1,receiver);',
+    '(0, Object.defineProperty)(metadata,"x",{value:1});',
   ])("keeps a fresh bound target or unused binding separate: %s", (write) => {
     expect(
       analyzeJavaScriptStaticSource(
