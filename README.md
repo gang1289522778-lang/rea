@@ -105,6 +105,10 @@ For native analysis, configure a provider first. See the
 [CLI and Evidence guide](docs/cli.md) for native commands, provider selection,
 snapshots and scripting.
 
+On Windows, the portable GUI ZIP is available from
+https://github.com/morluto/rea/releases/latest; it includes Node.js and the REA
+package runtime.
+
 ### Update REA
 
 REA changes quickly, and new releases include frequent bug fixes. Keep your
@@ -314,6 +318,7 @@ For exact options, prerequisites and result contracts:
 - [Installation and setup](docs/installation.md): agent registration, provider configuration, updates and uninstall.
 - [Readiness and troubleshooting](docs/installation.md#check-readiness-for-your-task): diagnose one agent or analysis engine.
 - [CLI and Evidence](docs/cli.md): commands, provider selection, snapshots, import/export and exit statuses.
+- [Windows desktop GUI (Korean)](docs/windows-gui.md): portable download, setup and limitations.
 - [MCP contracts](docs/mcp-contracts.md) and [agent prompts](docs/mcp-prompts.md): tool results, sessions and guided investigations.
 - [Tool catalog](docs/mcp-contracts.md#generated-catalog): generated inventory of tools, providers and CLI commands.
 - [Roadmap](docs/roadmap.md): planned work and capability trackers.

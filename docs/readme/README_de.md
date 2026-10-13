@@ -254,6 +254,7 @@ Beginne mit den [praxisnahen Anleitungen](https://rea.tools/de/guides/) auf der 
 - [Installation und Einrichtung](../installation.md): Agentenregistrierung, Provider-Konfiguration, Updates und Deinstallation.
 - [Bereitschaft und Fehlerbehebung](../installation.md#check-readiness-for-your-task): Diagnose eines bestimmten Agenten oder einer Analyse-Engine.
 - [CLI und Evidence](../cli.md): Befehle, Provider-Auswahl, Snapshots, Import/Export und Exit-Status.
+- [Windows desktop GUI (Korean)](../windows-gui.md): portable download, setup and limitations.
 - [MCP-Kontrakte](../mcp-contracts.md) und [Agenten-Prompts](../mcp-prompts.md): Werkzeugergebnisse, Sitzungen und geführte Untersuchungen.
 - [Werkzeugkatalog](../mcp-contracts.md#generated-catalog): Beim Build erzeugtes Inventar von Werkzeugen, Providern und CLI-Befehlen.
 - [Roadmap](../roadmap.md): Geplante Arbeiten und Fortschrittsübersichten zu Fähigkeiten.

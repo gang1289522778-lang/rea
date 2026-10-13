@@ -420,3 +420,113 @@ jobs:
 
       - name: Publish MCP Registry metadata
         run: ./mcp-publisher publish
+
+  publish-windows-gui:
+    name: Publish Windows GUI download
+    needs: [merged-release, release-please, qualification, publish]
+    if: >-
+      always() && !cancelled() && needs.publish.result == 'success' &&
+      ((needs.merged-release.result == 'success' && needs.merged-release.outputs.release_created == 'true') ||
+      (needs.release-please.result == 'success' && inputs.phase == 'publish' && needs.release-please.outputs.release_created == 'true'))
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - name: Check out the exact qualified release
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.merged-release.outputs.sha || needs.release-please.outputs.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Download the exact qualified package
+        uses: actions/download-artifact@v4
+        with:
+          name: verified-release-package
+          path: .cache/verified-package/
+
+      - name: Verify qualified package provenance and digest
+        id: package
+        run: node scripts/ci/verified-package.mjs validate .cache/verified-package
+
+      - name: Install locked production dependencies
+        run: npm ci --omit=dev --ignore-scripts
+
+      - name: Install the verified REA package into the portable bundle
+        shell: pwsh
+        env:
+          VERIFIED_PACKAGE_TARBALL: ${{ steps.package.outputs.tarball }}
+        run: |
+          $bundle = Join-Path $PWD ".cache\windows-gui-bundle"
+          New-Item -ItemType Directory -Path $bundle -Force | Out-Null
+          $moduleRoot = Join-Path $bundle "node_modules"
+          New-Item -ItemType Directory -Path $moduleRoot -Force | Out-Null
+          Copy-Item -Path .\node_modules\* -Destination $moduleRoot -Recurse -Force
+          & tar.exe -xzf $env:VERIFIED_PACKAGE_TARBALL -C $moduleRoot
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not extract the qualified REA package."
+          }
+          Move-Item -LiteralPath (Join-Path $moduleRoot "package") `
+            -Destination (Join-Path $moduleRoot "rea-agents")
+
+          $nodePath = (Get-Command node.exe -CommandType Application).Source
+          Copy-Item -LiteralPath $nodePath -Destination (Join-Path $bundle "node.exe")
+          $nodeLicense = Join-Path (Split-Path -Parent $nodePath) "LICENSE"
+          if (-not (Test-Path -LiteralPath $nodeLicense -PathType Leaf)) {
+            throw "The selected Node.js distribution does not include its license notice."
+          }
+          Copy-Item -LiteralPath $nodeLicense -Destination (Join-Path $bundle "NODE-LICENSE.txt")
+
+          $dotnetRoot = Split-Path -Parent (Get-Command dotnet.exe -CommandType Application).Source
+          foreach ($notice in @("LICENSE.txt", "ThirdPartyNotices.txt")) {
+            $noticePath = Join-Path $dotnetRoot $notice
+            if (-not (Test-Path -LiteralPath $noticePath -PathType Leaf)) {
+              throw "The .NET distribution is missing $notice."
+            }
+            Copy-Item -LiteralPath $noticePath -Destination (Join-Path $bundle "DOTNET-$notice")
+          }
+
+          dotnet publish .\windows-gui\launcher\ReaGuiLauncher.csproj `
+            --configuration Release --runtime win-x64 --self-contained true `
+            --output .\.cache\windows-gui-launcher
+          Copy-Item -LiteralPath .\.cache\windows-gui-launcher\rea-gui.exe `
+            -Destination (Join-Path $bundle "rea-gui.exe")
+          Copy-Item -LiteralPath .\docs\windows-gui.md `
+            -Destination (Join-Path $bundle "README-KO.md")
+          node .\scripts\verify-windows-gui-bundle.mjs $bundle
+
+          $version = (Get-Content -Raw .\package.json | ConvertFrom-Json).version
+          $archiveName = "rea-windows-x64-$version.zip"
+          $archivePath = Join-Path $PWD ".cache\$archiveName"
+          Compress-Archive -Path (Join-Path $bundle "*") -DestinationPath $archivePath -CompressionLevel Optimal
+          & tar.exe -tf $archivePath | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+            throw "The portable Windows GUI archive failed its ZIP integrity check."
+          }
+          $hash = (Get-FileHash -Algorithm SHA256 $archivePath).Hash.ToLowerInvariant()
+          [System.IO.File]::WriteAllText(
+            "$archivePath.sha256",
+            "$hash  $archiveName`n",
+            [System.Text.Encoding]::ASCII
+          )
+          "asset=$archivePath" >> $env:GITHUB_OUTPUT
+          "checksum=$archivePath.sha256" >> $env:GITHUB_OUTPUT
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Attach the portable GUI to the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ASSET: ${{ steps.package.outputs.asset }}
+          CHECKSUM: ${{ steps.package.outputs.checksum }}
+          VERSION: ${{ steps.package.outputs.version }}
+        run: gh release upload "$env:VERSION" "$env:ASSET" "$env:CHECKSUM" --clobber

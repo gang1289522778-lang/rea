@@ -255,7 +255,8 @@ npx rea-agents@latest setup
 
 - [インストールとセットアップ](../installation.md)：エージェントの登録、プロバイダーの設定、更新、アンインストール。
 - [準備状況の確認とトラブルシューティング](../installation.md#check-readiness-for-your-task)：特定のエージェントや分析エンジンを診断。
-- [CLI と Evidence](../cli.md)：コマンド、プロバイダーの選択、スナップショット、インポート／エクスポート、終了ステータス。
+- [CLI と Evidence](../cli.md)：コマンド、プロバイダーの選択、スナップショット、インポート／エクスポート、終了ステータス。：コマンド、プロバイダーの選択、スナップショット、インポート／エクスポート、終了ステータス。
+- [Windows desktop GUI (Korean)](../windows-gui.md): portable download, setup and limitations.
 - [MCP 契約](../mcp-contracts.md)と[エージェント向けプロンプト](../mcp-prompts.md)：ツールの結果、セッション、ガイド付き調査。
 - [ツールカタログ](../mcp-contracts.md#generated-catalog)：ビルド時に生成されるツール、プロバイダー、CLI コマンドの一覧。
 - [ロードマップ](../roadmap.md)：計画中の作業と機能の進捗。
