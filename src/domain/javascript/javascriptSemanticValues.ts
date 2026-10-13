@@ -914,13 +914,23 @@ const provenanceForExpression = (
         )
       : provenanceForBinding(binding, nestedContext(context));
   }
-  if (t.isMemberExpression(node) || t.isOptionalMemberExpression(node)) {
+  if (
+    t.isMemberExpression(node) ||
+    t.isOptionalMemberExpression(node) ||
+    t.isTSQualifiedName(node)
+  ) {
     const members: string[] = [];
     let current: t.Node = node;
     while (
       t.isMemberExpression(current) ||
-      t.isOptionalMemberExpression(current)
+      t.isOptionalMemberExpression(current) ||
+      t.isTSQualifiedName(current)
     ) {
+      if (t.isTSQualifiedName(current)) {
+        members.push(current.right.name);
+        current = current.left;
+        continue;
+      }
       if (!t.isNode(current.object))
         return semanticUnresolvedProvenance(
           "unknown",

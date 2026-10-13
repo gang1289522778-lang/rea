@@ -292,3 +292,43 @@ it("preserves unshadowed require origins through aliases and assignments", () =>
     }),
   ]);
 });
+
+it("retains internal import alias provenance without inventing a dependency", () => {
+  const ir = analyzeJavaScriptSemantics(`
+    import electron = require("electron");
+    import ipc = electron.ipcMain;
+    void ipc;
+  `);
+  expect(topLevelBinding(ir, "ipc").provenance).toMatchObject({
+    status: "module",
+    origins: [{ specifier: "electron", importedPath: ["ipcMain"] }],
+  });
+  expect(ir.moduleLinks.filter(({ kind }) => kind === "require")).toHaveLength(
+    1,
+  );
+  expect(ir.references.some(({ name }) => name === "ipcMain")).toBe(false);
+});
+
+it("does not publish namespace aliases into the surrounding program", () => {
+  const ir = analyzeJavaScriptSemantics(`
+    import electron = require("electron");
+    namespace A { import x = electron.ipcMain; void x; }
+    namespace B { import x = electron.ipcRenderer; void x; }
+    void x;
+  `);
+  const aliases = ir.bindings.filter(({ name }) => name === "x");
+  expect(aliases).toHaveLength(2);
+  expect(new Set(aliases.map(({ scopeId }) => scopeId)).size).toBe(2);
+  expect(
+    aliases.every(
+      ({ scopeId }) =>
+        ir.scopes.find((scope) => scope.scopeId === scopeId)?.kind ===
+        "namespace",
+    ),
+  ).toBe(true);
+  expect(
+    ir.references
+      .filter(({ name }) => name === "x")
+      .map(({ resolution }) => resolution),
+  ).toEqual(["resolved", "resolved", "unbound"]);
+});

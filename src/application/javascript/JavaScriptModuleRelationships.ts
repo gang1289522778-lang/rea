@@ -447,6 +447,9 @@ const moduleFormat = (
   ir: JavaScriptModuleSemanticIr,
 ): "commonjs" | "esm" | "mixed" | "unknown" => {
   const extension = posix.extname(path).toLowerCase();
+  // Node and TypeScript fix the module system by extension: mjs/mts emit ESM
+  // and cjs/cts emit CommonJS regardless of the links recovered inside them,
+  // including import-equals that compiles through createRequire.
   if (extension === ".mjs" || extension === ".mts") return "esm";
   if (extension === ".cjs" || extension === ".cts") return "commonjs";
   if (extension === ".ts" || extension === ".tsx") return "unknown";
