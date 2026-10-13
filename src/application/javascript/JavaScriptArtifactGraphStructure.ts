@@ -25,7 +25,10 @@ import {
   astObservationEvidence,
   staticInferenceEvidence,
 } from "./JavaScriptArtifactGraphEvidence.js";
-import { resolveArtifactPathByContext } from "./JavaScriptArtifactPathResolution.js";
+import {
+  artifactPathResolutionProperties,
+  resolveArtifactPathByContext,
+} from "./JavaScriptArtifactPathResolution.js";
 import { compareUnicodeCodePoints } from "../../domain/unicodeCodePointOrder.js";
 
 interface PackageRoleInput {
@@ -487,6 +490,7 @@ const addPackageRole = (
     target_node_id: role.node_id,
     relation: "loads",
     properties: {
+      ...artifactPathResolutionProperties(resolution),
       declared_path: input.declaredPath,
       resolution_context: resolution.resolution_context,
       resolved_path: resolution.resolved_path,

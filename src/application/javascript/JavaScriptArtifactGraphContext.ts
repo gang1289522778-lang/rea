@@ -22,6 +22,7 @@ import {
   unavailableAstEvidence,
 } from "./JavaScriptArtifactGraphEvidence.js";
 import {
+  artifactPathResolutionProperties,
   resolveArtifactPathByContext,
   type ArtifactPathResolution,
 } from "./JavaScriptArtifactPathResolution.js";
@@ -268,6 +269,7 @@ export const createElectronRoleNode = (
       {
         label: input.resolution.resolved_path ?? input.resolution.declared_path,
         properties: {
+          ...artifactPathResolutionProperties(input.resolution),
           declared_path: input.resolution.declared_path,
           resolution_context: input.resolution.resolution_context,
           resolved_path: input.resolution.resolved_path,

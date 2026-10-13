@@ -7,7 +7,8 @@ export type JavaScriptArtifactFileKind =
   | "javascript"
   | "html"
   | "source-map"
-  | "native-addon";
+  | "native-addon"
+  | "unsupported";
 
 /** One content-addressed local artifact file and its text availability. */
 export interface JavaScriptArtifactFile {

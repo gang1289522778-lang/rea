@@ -319,7 +319,10 @@ const readText = async (
     );
     return { included: false, reason: "outside-analysis-scope" };
   }
-  if (input.expected.kind === "native-addon") {
+  if (
+    input.expected.kind === "native-addon" ||
+    input.expected.kind === "unsupported"
+  ) {
     await verifyEntryBytes(
       await input.reader.open(input.entry, context.signal),
       input.expected,
@@ -475,6 +478,7 @@ const relevantKind = (path: string): JavaScriptArtifactFileKind | undefined => {
   if (/\.html?$/u.test(lower)) return "html";
   if (lower.endsWith(".map")) return "source-map";
   if (lower.endsWith(".node")) return "native-addon";
+  if (lower.endsWith(".jsc")) return "unsupported";
   return undefined;
 };
 

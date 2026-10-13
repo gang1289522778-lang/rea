@@ -1,4 +1,4 @@
-import { writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -20,6 +20,94 @@ import { createJavaScriptArtifactReader } from "../../../../src/artifacts/javasc
 import { createJavaScriptSourceAnalysis } from "../../../../src/artifacts/javascript/JavaScriptSourceAnalysis.js";
 import { analyzeAndAdoptJavaScriptArtifactFiles } from "../../../../src/application/javascript/JavaScriptArtifactAnalysis.js";
 import { createJavaScriptSemanticGraphProjection } from "../../../../src/application/javascript/JavaScriptSemanticGraphBuilder.js";
+
+it.each([undefined, ["main.js"], ["main.js", "compiled.jsc"]])(
+  "retains unsupported dependencies and incomplete coverage with source selection %j",
+  async (source_paths) => {
+    for (const source of [
+      "require('./compiled.jsc');",
+      "import './compiled.jsc';",
+      "import('./compiled.jsc');",
+    ]) {
+      const root = await createTestTempDirectory("rea-js-cached-dependency-");
+      await writeFile(join(root, "main.js"), source);
+      await writeFile(join(root, "compiled.jsc"), Buffer.from([0xff, 0, 0x80]));
+      const result = await analyzeJavaScriptApplication({
+        input_path: root,
+        ...(source_paths === undefined ? {} : { source_paths }),
+      });
+      if (!result.ok) throw result.error;
+      const analysis = javascriptApplicationAnalysisResultSchema.parse(
+        result.value.normalized_result,
+      );
+      expect(
+        analysis.graph.edges.some(
+          ({ properties }) =>
+            properties.specifier === "./compiled.jsc" &&
+            properties.resolution_status === "unavailable" &&
+            properties.candidate_path === "compiled.jsc",
+        ),
+      ).toBe(true);
+      expect(
+        analysis.graph.nodes.some(({ observations }) =>
+          observations.some(({ label }) => label === "compiled.jsc"),
+        ),
+      ).toBe(true);
+      expect(analysis.graph.coverage.status).toBe("partial");
+      expect(
+        analysis.graph.limitations.some(
+          (limitation) =>
+            limitation.includes("compiled.jsc") &&
+            limitation.includes("unsupported"),
+        ),
+      ).toBe(true);
+    }
+  },
+);
+
+it("retains nested unsupported entrypoint candidate identities in role and package facts", async () => {
+  const root = await createTestTempDirectory("rea-js-cached-entrypoint-");
+  await mkdir(join(root, "app"));
+  await writeFile(
+    join(root, "app", "package.json"),
+    JSON.stringify({ main: "./compiled.jsc" }),
+  );
+  await writeFile(
+    join(root, "app", "compiled.jsc"),
+    Buffer.from([0xff, 0, 0x80]),
+  );
+  const result = await analyzeJavaScriptApplication({ input_path: root });
+  if (!result.ok) throw result.error;
+  const analysis = javascriptApplicationAnalysisResultSchema.parse(
+    result.value.normalized_result,
+  );
+  const role = analysis.graph.nodes.find(
+    ({ kind }) => kind === "electron-main",
+  );
+  expect(role?.observations).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        properties: expect.objectContaining({
+          candidate_path: "app/compiled.jsc",
+          resolved_path: null,
+          resolution_status: "unavailable",
+        }),
+      }),
+    ]),
+  );
+  expect(analysis.graph.edges).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        target_node_id: role?.node_id,
+        properties: expect.objectContaining({
+          candidate_path: "app/compiled.jsc",
+          resolved_path: null,
+          resolution_status: "unavailable",
+        }),
+      }),
+    ]),
+  );
+});
 
 describe("JavaScript source selection cancellation boundary", () => {
   it("keeps unselected files outside scope when the real worker cancels after the last selected file", async () => {

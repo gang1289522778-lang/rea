@@ -163,10 +163,11 @@ const graphCoverage = (context: JavaScriptArtifactGraphContext) => {
     context.analysis.packages.some(({ status }) => status !== "included") ||
     context.analysis.json_modules.some(({ status }) => status !== "included") ||
     context.analysis.source_maps.some(({ status }) => status === "invalid");
-  const partialJavaScript = context.analysis.files.some(
-    ({ javascript }) =>
-      javascript !== null && javascript.parse_status === "partial",
-  );
+  const partialJavaScript =
+    context.analysis.files.some(
+      ({ javascript }) =>
+        javascript !== null && javascript.parse_status === "partial",
+    ) || context.fileSet.files.some(({ kind }) => kind === "unsupported");
   const unknownGap =
     (context.fileSet.source_selection?.unselected_files ?? 0) > 0 ||
     context.analysis.files.some(
@@ -178,7 +179,8 @@ const graphCoverage = (context: JavaScriptArtifactGraphContext) => {
     context.fileSet.invalid_utf8_files > 0 ||
     sourceMapPolicyGap ||
     malformedStructuredData ||
-    partialJavaScript;
+    partialJavaScript ||
+    context.fileSet.files.some(({ kind }) => kind === "unsupported");
   const executionLimits = context.analysis.files.flatMap(
     ({ analysis_failure, application_projection_failure }) =>
       [analysis_failure, application_projection_failure].flatMap((failure) =>
@@ -245,11 +247,23 @@ const graphLimitations = (
   );
   return [
     ...context.analysis.limitations,
+    ...context.fileSet.files
+      .filter(({ kind }) => kind === "unsupported")
+      .map(
+        ({ path }) =>
+          `The inventoried source representation at ${path} is unsupported; its JavaScript semantics and relationships remain unavailable.`,
+      ),
     ...(context.fileSet.source_selection === undefined
       ? []
       : [
           `Caller-selected source analysis leaves ${String(context.fileSet.source_selection.unselected_files)} inventoried files outside analysis scope. Inventory identity covers the complete artifact; relationships through unselected sources remain unknown.`,
         ]),
+    ...context.fileSet.files
+      .filter(({ kind }) => kind === "unsupported")
+      .map(
+        ({ path }) =>
+          `The inventoried source representation at ${path} is unsupported; its JavaScript semantics and relationships remain unavailable.`,
+      ),
     ...context.snapshot.integrity_contradictions.map(
       ({ logical_path: path }) =>
         `Artifact integrity metadata contradicts observed bytes at ${path}; the observed bytes are untrusted.`,
