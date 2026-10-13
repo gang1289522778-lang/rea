@@ -23,8 +23,8 @@ import {
 } from "../artifactGraph.js";
 import { artifactInspectionResultSchema } from "../artifactInspection.js";
 import {
-  parseOwnedJavaScriptApplicationAnalysisSteps,
-  type JavaScriptApplicationAnalysisResult,
+  parseStoredJavaScriptApplicationAnalysisSteps,
+  type StoredJavaScriptApplicationAnalysisResult,
 } from "../javascript/javascriptApplicationAnalysis.js";
 import { analysisInputErrorFromIssues } from "../inputIssueProjection.js";
 import { projectBinaryLayoutView } from "./binaryLayoutView.js";
@@ -139,7 +139,17 @@ const itemViewSchema = z.discriminatedUnion("collection", [
 ]);
 const pageViewSchema = z.strictObject({
   kind: z.literal("page"),
-  collection: z.enum(["sections", "symbols", "modules"]),
+  collection: z
+    .enum([
+      "sections",
+      "symbols",
+      "modules",
+      "semantic_files",
+      "semantic_unknowns",
+    ])
+    .describe(
+      "sections/symbols page binary layouts. modules, semantic_files (per-source semantic coverage and exact unknown counts) and semantic_unknowns (retained unknown frontiers by source) page JavaScript application Evidence.",
+    ),
   offset: z.number().int().nonnegative(),
   limit: z.number().int().positive(),
 });
@@ -644,11 +654,11 @@ const parentDigest = (evidenceId: string): string => evidenceId.slice(3);
 
 const parseJavaScriptParent = (
   input: unknown,
-): Result<JavaScriptApplicationAnalysisResult, AnalysisError> => {
+): Result<StoredJavaScriptApplicationAnalysisResult, AnalysisError> => {
   try {
     // Only the existing realm-private graph proofs permit reuse. Imported or
     // merely frozen graphs still receive full canonical validation.
-    const steps = parseOwnedJavaScriptApplicationAnalysisSteps(input);
+    const steps = parseStoredJavaScriptApplicationAnalysisSteps(input);
     let step = steps.next();
     while (!step.done) step = steps.next();
     return ok(step.value);

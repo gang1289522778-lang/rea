@@ -122,3 +122,10 @@ export function* semanticWriteTargets(
  */
 export const javascriptDisplayText = (value: string): string =>
   value === "" ? '""' : value;
+
+/** The colon form changes a literal's prototype rather than defining an own key. */
+export const isJavaScriptPrototypeSetter = (node: t.Node): boolean =>
+  t.isObjectProperty(node) &&
+  !node.computed &&
+  !node.shorthand &&
+  semanticStaticPropertyKey(node.key, false) === "__proto__";

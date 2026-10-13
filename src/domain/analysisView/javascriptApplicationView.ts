@@ -4,8 +4,9 @@ import {
 } from "../analysisErrorCore.js";
 import type { AnalysisError } from "../analysisErrorBase.js";
 import { uniqueSorted } from "../canonicalOrdering.js";
+import { compareUnicodeCodePoints } from "../unicodeCodePointOrder.js";
 import { jsonObjectSchema, type JsonValue } from "../jsonValue.js";
-import type { JavaScriptApplicationAnalysisResult } from "../javascript/javascriptApplicationAnalysis.js";
+import type { StoredJavaScriptApplicationAnalysisResult } from "../javascript/javascriptApplicationAnalysis.js";
 import type { ApplicationNode } from "../javascript/javascriptApplicationGraphSchemas.js";
 import { err, ok, type Result } from "../result.js";
 import {
@@ -129,7 +130,7 @@ const moduleItem = (node: ApplicationNode): JsonValue => ({
 });
 
 const applicationUnknownCount = (
-  analysis: JavaScriptApplicationAnalysisResult,
+  analysis: StoredJavaScriptApplicationAnalysisResult,
 ): number =>
   analysis.graph.nodes.reduce(
     (count, node) => count + Number(node.kind === "unknown"),
@@ -137,7 +138,7 @@ const applicationUnknownCount = (
   );
 
 const javascriptUnknowns = (
-  analysis: JavaScriptApplicationAnalysisResult,
+  analysis: StoredJavaScriptApplicationAnalysisResult,
 ): readonly string[] => {
   const unknowns = [
     ...analysis.limitations,
@@ -156,14 +157,30 @@ const javascriptUnknowns = (
     );
   if (analysis.semantic_graph.unknowns.length > 0)
     unknowns.push(
-      `${String(analysis.semantic_graph.unknowns.length)} semantic graph unknowns remain in the parent Evidence.`,
+      `${String(analysis.semantic_graph.unknowns.length)} semantic graph unknowns remain in the parent Evidence; page semantic_unknowns to read them.`,
+    );
+  const truncatedSources = analysis.semantic_graph.coverage.files.filter(
+    ({ status }) => status !== "complete",
+  ).length;
+  if (truncatedSources > 0)
+    unknowns.push(
+      `${String(truncatedSources)} sources have truncated or unavailable semantic facts; page semantic_files for exact omitted counts.`,
     );
   return unknowns;
 };
 
+const semanticFileStatusCounts = (
+  analysis: StoredJavaScriptApplicationAnalysisResult,
+): Record<string, number> => {
+  const counts: Record<string, number> = {};
+  for (const { status } of analysis.semantic_graph.coverage.files)
+    counts[status] = (counts[status] ?? 0) + 1;
+  return counts;
+};
+
 const parentFields = (
   parent: AnalysisViewParent,
-  analysis: JavaScriptApplicationAnalysisResult,
+  analysis: StoredJavaScriptApplicationAnalysisResult,
 ) => ({
   parent_evidence_id: parent.evidenceId,
   parent_operation: "analyze_javascript_application" as const,
@@ -238,7 +255,7 @@ const selectModule = (
 /** Project one JavaScript application view without re-running reconstruction. */
 export const projectJavaScriptApplicationView = (
   parent: AnalysisViewParent,
-  analysis: JavaScriptApplicationAnalysisResult,
+  analysis: StoredJavaScriptApplicationAnalysisResult,
   view: Exclude<AnalysisViewRequest, { kind: "api-surface" }>,
 ): Result<UnsignedAnalysisView, AnalysisError> => {
   if (view.kind !== "summary" && view.kind !== "item" && view.kind !== "page")
@@ -268,12 +285,7 @@ export const projectJavaScriptApplicationView = (
           application: analysis.graph.coverage,
           semantic: {
             ...analysis.semantic_graph.coverage,
-            families: analysis.semantic_graph.coverage.families.map(
-              ({ unknown_ids, ...family }) => ({
-                ...family,
-                unknown_count: unknown_ids.length,
-              }),
-            ),
+            files: semanticFileStatusCounts(analysis),
           },
           application_unknowns: applicationUnknownCount(analysis),
           semantic_unknowns: analysis.semantic_graph.unknowns.length,
@@ -300,7 +312,29 @@ export const projectJavaScriptApplicationView = (
       ...shared,
     });
   }
-  if (view.kind !== "page" || view.collection !== "modules")
+  if (view.collection === "semantic_files") {
+    const files = analysis.semantic_graph.coverage.files;
+    const items = files.slice(view.offset, view.offset + view.limit);
+    return ok({
+      kind: "page",
+      view,
+      items,
+      coverage: pageCoverage(view.offset, items.length, files.length),
+      ...shared,
+    });
+  }
+  if (view.collection === "semantic_unknowns") {
+    const unknowns = semanticUnknownItems(analysis);
+    const items = unknowns.slice(view.offset, view.offset + view.limit);
+    return ok({
+      kind: "page",
+      view,
+      items,
+      coverage: pageCoverage(view.offset, items.length, unknowns.length),
+      ...shared,
+    });
+  }
+  if (view.collection !== "modules")
     return err(
       jsIncompatible(
         "Section and symbol collections apply to inspect_binary_layout Evidence.",
@@ -321,3 +355,30 @@ export const projectJavaScriptApplicationView = (
     ...shared,
   });
 };
+
+/** Retained unknown frontiers grouped by source, family and reason. */
+const semanticUnknownItems = (
+  analysis: StoredJavaScriptApplicationAnalysisResult,
+): JsonValue[] =>
+  analysis.semantic_graph.unknowns
+    .map((unknown) => {
+      const { location } = unknown.evidence;
+      const modulePath = !location.available
+        ? null
+        : location.value.kind === "source-range"
+          ? location.value.source
+          : location.value.kind === "artifact-path"
+            ? location.value.path
+            : null;
+      return { module_path: modulePath, ...unknown };
+    })
+    .sort(
+      (left, right) =>
+        compareUnicodeCodePoints(
+          left.module_path ?? "",
+          right.module_path ?? "",
+        ) ||
+        compareUnicodeCodePoints(left.family, right.family) ||
+        compareUnicodeCodePoints(left.reason, right.reason) ||
+        compareUnicodeCodePoints(left.unknown_id, right.unknown_id),
+    );

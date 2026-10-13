@@ -7,6 +7,7 @@ import {
 } from "./javascriptApplicationGraph.js";
 import {
   javaScriptSemanticGraphSchema,
+  javaScriptLegacyStoredSemanticGraphSchema,
   isValidatedImmutableJavaScriptSemanticGraph,
   type JavaScriptSemanticGraph,
 } from "./javascriptSemanticGraph.js";
@@ -35,6 +36,8 @@ export const analyzeJavaScriptApplicationInputSchema = z.strictObject({
 /** Compact counts for the high-level Electron architecture/security surface. */
 const electronBoundarySummarySchema = z.strictObject({
   browser_windows: countSchema,
+  web_contents_views: countSchema,
+  webview_attach_handlers: countSchema,
   explicit_web_preferences: countSchema,
   preload_entrypoints: countSchema,
   context_bridge_apis: countSchema,
@@ -47,6 +50,7 @@ const electronBoundarySummarySchema = z.strictObject({
     renderer_listeners: countSchema,
     main_handlers: countSchema,
     paired_renderer_transmissions: countSchema,
+    guarded_renderer_transmissions: countSchema,
     ambiguous_renderer_transmissions: countSchema,
     unpaired_literal_renderer_transmissions: countSchema,
   }),
@@ -55,6 +59,9 @@ const electronBoundarySummarySchema = z.strictObject({
   resolved_utility_entrypoints: countSchema,
   native_addon_bindings: countSchema,
   resolved_native_addon_bindings: countSchema,
+  inferred_api_identity_findings: countSchema,
+  content_security_policies: countSchema,
+  content_security_policy_concerns: countSchema,
 });
 
 const reconstructionStatisticsSchema = z.strictObject({
@@ -91,7 +98,10 @@ type BindingIssue = {
 };
 
 function* checkApplicationBindingsSteps(
-  result: z.infer<typeof applicationAnalysisResultShape>,
+  result: Pick<
+    z.infer<typeof applicationAnalysisResultShape>,
+    "graph" | "semantic_graph" | "root_artifact_sha256"
+  >,
   context: { readonly addIssue: (issue: BindingIssue) => void },
 ): Generator<void> {
   if (result.semantic_graph.application_graph_id !== result.graph.graph_id)
@@ -159,6 +169,52 @@ export const javascriptApplicationAnalysisResultSchema =
     }
   });
 
+// New summary families were not measured by previous producers. Missing values
+// stay explicit unknowns in the read projection rather than becoming zero.
+const legacyElectronBoundarySummarySchema = electronBoundarySummarySchema
+  .omit({
+    web_contents_views: true,
+    webview_attach_handlers: true,
+    inferred_api_identity_findings: true,
+    content_security_policies: true,
+    content_security_policy_concerns: true,
+  })
+  .extend({
+    ipc: electronBoundarySummarySchema.shape.ipc
+      .omit({ guarded_renderer_transmissions: true })
+      .transform((ipc) => ({ ...ipc, guarded_renderer_transmissions: null })),
+  })
+  .transform((summary) => ({
+    ...summary,
+    web_contents_views: null,
+    webview_attach_handlers: null,
+    inferred_api_identity_findings: null,
+    content_security_policies: null,
+    content_security_policy_concerns: null,
+  }));
+
+const legacyApplicationAnalysisResultSchema = applicationAnalysisResultShape
+  .extend({
+    summary: legacyElectronBoundarySummarySchema,
+    semantic_graph: javaScriptLegacyStoredSemanticGraphSchema,
+  })
+  .superRefine((result, context) => {
+    const steps = checkApplicationBindingsSteps(result, context);
+    while (!steps.next().done) {
+      /* The imported projection owns its graph checks. */
+    }
+  });
+
+/** Read previous stored Evidence separately from the strict current producer contract. */
+export const javascriptStoredApplicationAnalysisResultSchema = z.union([
+  javascriptApplicationAnalysisResultSchema,
+  legacyApplicationAnalysisResultSchema,
+]);
+
+export type StoredJavaScriptApplicationAnalysisResult = z.infer<
+  typeof javascriptStoredApplicationAnalysisResultSchema
+>;
+
 const ownedAnalysisResultShape = applicationAnalysisResultShape.extend({
   graph: z.custom<JavaScriptApplicationGraph>(
     isValidatedImmutableJavaScriptApplicationGraph,
@@ -183,6 +239,20 @@ export function* parseOwnedJavaScriptApplicationAnalysisSteps(
   });
   if (issues.length > 0) throw new z.ZodError(issues);
   return prepared.data;
+}
+
+/** Preserve the current owned fast path while authenticating previous stored formats. */
+export function* parseStoredJavaScriptApplicationAnalysisSteps(
+  input: unknown,
+): Generator<void, StoredJavaScriptApplicationAnalysisResult> {
+  const legacyShape = z.object({
+    semantic_graph: z.object({
+      coverage: z.object({ files: z.never().optional() }),
+    }),
+  });
+  if (legacyShape.safeParse(input).success)
+    return legacyApplicationAnalysisResultSchema.parse(input);
+  return yield* parseOwnedJavaScriptApplicationAnalysisSteps(input);
 }
 
 /** Parsed public JavaScript application analysis request. */

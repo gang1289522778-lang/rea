@@ -2,8 +2,8 @@ import { digestCanonicalValue } from "../canonicalDigest.js";
 import { compareUnicodeCodePoints } from "../unicodeCodePointOrder.js";
 import { parseEvidence, type Evidence } from "../evidence.js";
 import {
-  javascriptApplicationAnalysisResultSchema,
-  type JavaScriptApplicationAnalysisResult,
+  javascriptStoredApplicationAnalysisResultSchema,
+  type StoredJavaScriptApplicationAnalysisResult,
 } from "./javascriptApplicationAnalysis.js";
 import type { JavaScriptApplicationGraph } from "./javascriptApplicationGraph.js";
 import type { ReconcileJavaScriptRuntimeInput } from "./javascriptRuntimeReconciliationSchemas.js";
@@ -21,7 +21,7 @@ export interface ParsedStaticLayer {
   readonly layerId: string;
   readonly role: StaticLayerInput["role"];
   readonly evidence: Evidence;
-  readonly result: JavaScriptApplicationAnalysisResult;
+  readonly result: StoredJavaScriptApplicationAnalysisResult;
   readonly graph: JavaScriptApplicationGraph;
   readonly runtimeMappings: readonly RuntimeMapping[];
 }
@@ -45,7 +45,7 @@ const parseStaticLayer = (
 ): ParsedStaticLayer => {
   const evidence = parseAtPath(parseEvidence, layer.analysis, evidencePath);
   const result = parseAtPath(
-    (value) => javascriptApplicationAnalysisResultSchema.parse(value),
+    (value) => javascriptStoredApplicationAnalysisResultSchema.parse(value),
     evidence.normalized_result,
     [...evidencePath, "normalized_result"],
   );

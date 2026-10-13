@@ -17,8 +17,8 @@ import { err, ok, type Result } from "../../domain/result.js";
 import { z } from "zod";
 import {
   analyzeJavaScriptApplicationInputSchema,
-  javascriptApplicationAnalysisResultSchema,
-  type JavaScriptApplicationAnalysisResult,
+  javascriptStoredApplicationAnalysisResultSchema,
+  type StoredJavaScriptApplicationAnalysisResult,
 } from "../../domain/javascript/javascriptApplicationAnalysis.js";
 import type { JavaScriptApplicationGraph } from "../../domain/javascript/javascriptApplicationGraph.js";
 import type { JavaScriptSemanticGraph } from "../../domain/javascript/javascriptSemanticGraph.js";
@@ -63,7 +63,7 @@ const ownedApplicationSources = new WeakMap<
 /** Retain the producer-validated meaning of its exact immutable result snapshot. */
 export const rememberOwnedApplicationGraphEvidence = (
   evidence: Evidence,
-  result: JavaScriptApplicationAnalysisResult,
+  result: StoredJavaScriptApplicationAnalysisResult,
 ): Evidence => {
   if (
     !isImmutableEvidence(evidence) ||
@@ -124,7 +124,7 @@ const staticApplicationSource = (
   path: readonly (string | number)[],
 ): ApplicationGraphEvidenceSource => {
   const result = parseCallerValue(
-    (input) => javascriptApplicationAnalysisResultSchema.parse(input),
+    (input) => javascriptStoredApplicationAnalysisResultSchema.parse(input),
     evidence.normalized_result,
     [...path, "normalized_result"],
   );
@@ -133,7 +133,7 @@ const staticApplicationSource = (
 
 const staticApplicationSourceForResult = (
   evidence: Evidence,
-  result: JavaScriptApplicationAnalysisResult,
+  result: StoredJavaScriptApplicationAnalysisResult,
   path: readonly (string | number)[],
 ): ApplicationGraphEvidenceSource => {
   if (
@@ -249,7 +249,7 @@ const managedApplicationSource = (
 
 const assertApplicationSubject = (
   evidence: Evidence,
-  result: JavaScriptApplicationAnalysisResult,
+  result: StoredJavaScriptApplicationAnalysisResult,
   path: readonly (string | number)[],
 ): void => {
   if (

@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { JAVASCRIPT_APPLICATION_EVIDENCE_EXAMPLE } from "../../contracts/javascript/javascriptRuntimeReconciliationExample.js";
+import { digestCanonicalValue } from "../canonicalDigest.js";
 import { freezeJsonSnapshot } from "../immutableJson.js";
 import {
   javascriptApplicationAnalysisResultSchema,
   parseOwnedJavaScriptApplicationAnalysisSteps,
+  parseStoredJavaScriptApplicationAnalysisSteps,
 } from "./javascriptApplicationAnalysis.js";
 import {
   createJavaScriptApplicationGraph,
@@ -323,4 +325,66 @@ describe("graphs transferred to their sealing steps", () => {
       ),
     ).toEqual(issuesFrom(() => createJavaScriptApplicationGraph(stale)));
   });
+});
+
+it("authenticates previous stored graphs and retains unrecorded counts as unknown", () => {
+  const current = example();
+  const { graph_id: _id, ...semantic } = current.semantic_graph;
+  const { files: _files, ...coverage } = semantic.coverage;
+  const legacySemantic = {
+    ...semantic,
+    coverage: {
+      ...coverage,
+      families: coverage.families.map(
+        ({
+          retained_unknowns: _retained,
+          omitted_unknowns: _omitted,
+          ...family
+        }) => ({
+          ...family,
+          unknown_ids: semantic.unknowns
+            .filter(({ family: name }) => name === family.family)
+            .map(({ unknown_id }) => unknown_id),
+        }),
+      ),
+    },
+  };
+  const {
+    web_contents_views: _views,
+    webview_attach_handlers: _webviews,
+    inferred_api_identity_findings: _identity,
+    content_security_policies: _csp,
+    content_security_policy_concerns: _concerns,
+    ipc,
+    ...summary
+  } = current.summary;
+  const { guarded_renderer_transmissions: _guarded, ...legacyIpc } = ipc;
+  const legacy = {
+    ...current,
+    summary: { ...summary, ipc: legacyIpc },
+    semantic_graph: {
+      ...legacySemantic,
+      graph_id: `jsrg_${digestCanonicalValue(legacySemantic, "JavaScript semantic graph")}`,
+    },
+  };
+  const before = JSON.stringify(legacy);
+  const read = complete(parseStoredJavaScriptApplicationAnalysisSteps(legacy));
+  expect(read.summary.web_contents_views).toBeNull();
+  expect(read.summary.ipc.guarded_renderer_transmissions).toBeNull();
+  expect(read.semantic_graph.coverage.files).toEqual([]);
+  expect(read.semantic_graph.limitations.join("\n")).toContain(
+    legacy.semantic_graph.graph_id,
+  );
+  expect(JSON.stringify(legacy)).toBe(before);
+  expect(() =>
+    complete(
+      parseStoredJavaScriptApplicationAnalysisSteps({
+        ...legacy,
+        semantic_graph: {
+          ...legacy.semantic_graph,
+          graph_id: `jsrg_${"f".repeat(64)}`,
+        },
+      }),
+    ),
+  ).toThrow(z.ZodError);
 });
