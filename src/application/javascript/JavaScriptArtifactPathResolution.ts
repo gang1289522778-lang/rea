@@ -78,6 +78,10 @@ export interface ResolveArtifactPathInput {
   readonly htmlBaseHref?: string | null;
   /** Import/require semantics; runtime resource paths omit this provenance. */
   readonly moduleKind?: JavaScriptModuleResolutionMode;
+  /** Electron runtime paths identify the exact filename supplied by the caller. */
+  readonly runtimeEntrypoint?: boolean;
+  /** Resolve a runtime URL as an exact URL resource while retaining its source context. */
+  readonly exactUrlResource?: boolean;
 }
 
 /** Preserve an explicitly retained loader mode on graph relationships. */
@@ -222,6 +226,9 @@ const resolvePath = (input: ResolveArtifactPathInput): CandidateResolution => {
           ],
         };
   }
+  if (input.exactUrlResource) return resolveExactUrlResource(input);
+  if (input.runtimeEntrypoint && isRuntimePathDeclaration(input))
+    return resolveRuntimeEntrypoint(input);
   // Package import keys are literal lookup identities, not artifact paths.
   // The selected target is admitted separately by resolveExportTarget.
   if (
@@ -258,6 +265,67 @@ const resolvePath = (input: ResolveArtifactPathInput): CandidateResolution => {
       ) ?? notFoundCandidate()
     );
   return resolveCandidate(input, confined, new Set(), emittedSourceCandidates);
+};
+
+const resolveExactUrlResource = (
+  input: ResolveArtifactPathInput,
+): CandidateResolution => {
+  // Electron loadURL requires a protocol. A scheme-less string is not relative
+  // to the calling script; filesystem paths belong to loadFile.
+  if (!hasScheme(input.declaredPath))
+    return unresolvedCandidate("unavailable", [
+      "Electron loadURL requires a URL protocol; relative filesystem paths belong to loadFile.",
+    ]);
+  if (!/^file:/iu.test(input.declaredPath))
+    return unresolvedCandidate("external", [
+      "Only file URLs can be mapped to selected local application artifacts.",
+    ]);
+  const urlContextCandidate = contextualCandidate(input);
+  if (typeof urlContextCandidate !== "string") return urlContextCandidate;
+  const confined = confineCandidate(urlContextCandidate);
+  if (typeof confined !== "string") return confined;
+  return (
+    resolveFileCandidates(input, [confined]) ?? {
+      resolvedPath: null,
+      status: "not-found",
+      candidatePath: confined,
+      limitations: [
+        `The exact URL resource ${confined} was not found among the selected application files.`,
+      ],
+    }
+  );
+};
+
+const isRuntimePathDeclaration = (input: ResolveArtifactPathInput): boolean =>
+  input.context === "filesystem-expression" ||
+  (input.context === "module-specifier" &&
+    (isRelativeJavaScriptModuleSpecifier(input.declaredPath) ||
+      input.declaredPath.startsWith("/") ||
+      fileUrlPath(input.declaredPath) !== undefined));
+
+const resolveRuntimeEntrypoint = (
+  input: ResolveArtifactPathInput,
+): CandidateResolution => {
+  const rejected = rejectDeclaration(input.declaredPath);
+  if (rejected !== null) return rejected;
+  if (hasScheme(input.declaredPath) || looksExternal(input.declaredPath))
+    return unresolvedCandidate("external", [
+      "Electron runtime entrypoints must identify local paths, not external URLs.",
+    ]);
+  const candidate = confineCandidate(
+    relativeCandidate(input.sourcePath, input.declaredPath),
+  );
+  if (typeof candidate !== "string") return candidate;
+  return (
+    resolveFileCandidates(input, [candidate]) ?? {
+      resolvedPath: null,
+      status: "not-found",
+      candidatePath: candidate,
+      limitations: [
+        `The declared Electron runtime entrypoint ${candidate} was not found as an exact file among the selected application files; extension and directory fallback were not attempted.`,
+      ],
+    }
+  );
 };
 
 const resolveRuntimeSourceCandidates = (
@@ -316,6 +384,14 @@ const contextualCandidate = (
     context === "url-reference"
       ? stripQueryAndFragment(input.declaredPath)
       : input.declaredPath;
+  if (context === "url-reference" && declared.length === 0)
+    return input.exactUrlResource === true
+      ? unresolvedCandidate("unavailable", [
+          "A suffix-only runtime URL requires the window's current document URL; the calling script does not establish that base.",
+        ])
+      : unresolvedCandidate("rejected", [
+          "The URL reference contains no pathname, and its base document is not established by this analysis.",
+        ]);
   if (context === "module-specifier" && /^file:/iu.test(declared)) {
     const fileUrl = fileUrlPath(declared);
     if (fileUrl === null)

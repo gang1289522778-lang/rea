@@ -283,6 +283,13 @@ const addDiscoveredRole = (
     sourcePath: input.file.path,
     context: input.value.resolution_context,
     files: context.filesByPath,
+    runtimeEntrypoint:
+      input.value.role === "preload" ||
+      (input.value.role === "renderer" &&
+        input.value.resolution_context === "filesystem-expression"),
+    exactUrlResource:
+      input.value.role === "renderer" &&
+      input.value.resolution_context === "module-specifier",
   });
   const role = createElectronRoleNode(context, {
     kind:

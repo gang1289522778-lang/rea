@@ -160,6 +160,7 @@ export const summarizeElectronBoundaries = (
           specifier: finding.module_path,
           context: finding.module_resolution_context,
           files,
+          moduleKind: "require",
         }),
     ).length,
     native_addon_bindings: nativeBindings.length,
@@ -204,6 +205,7 @@ interface ResolveToFileInput {
   readonly files: ReadonlyMap<string, JavaScriptArtifactFile>;
   readonly kind?: JavaScriptArtifactFile["kind"];
   readonly moduleKind?: "import" | "require";
+  readonly runtimeEntrypoint?: boolean;
 }
 
 const resolvesToFile = (input: ResolveToFileInput): boolean => {
@@ -212,6 +214,7 @@ const resolvesToFile = (input: ResolveToFileInput): boolean => {
     sourcePath: input.file.path,
     context: input.context,
     files: input.files,
+    ...(input.runtimeEntrypoint ? { runtimeEntrypoint: true } : {}),
     ...(input.moduleKind === undefined ? {} : { moduleKind: input.moduleKind }),
   }).resolved_path;
   return (
