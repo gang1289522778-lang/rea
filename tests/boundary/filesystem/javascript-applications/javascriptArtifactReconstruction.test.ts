@@ -98,7 +98,11 @@ it("preserves graph commitments and export shapes when consuming file-local IR",
     expect(buildJavaScriptArtifactGraph(snapshot, files, compact)).toEqual(
       graph,
     );
-    const semantic = projection.finish(snapshot.manifest.root_sha256, graph);
+    const semantic = projection.finish(
+      snapshot.manifest.root_sha256,
+      graph,
+      [],
+    );
     expect(semantic).toEqual(
       buildJavaScriptSemanticGraph({
         rootArtifactSha256: snapshot.manifest.root_sha256,
@@ -141,7 +145,8 @@ it("preserves graph commitments and export shapes when consuming file-local IR",
         projectJavaScriptSemanticFileSteps(
           analyzed.file,
           analyzed.semantic.ir,
-          transferred.remainingFileNodeBudget(),
+          null,
+          null,
         ),
       );
       const module = projectJavaScriptModuleSemantics(analyzed.semantic.ir);
@@ -158,7 +163,7 @@ it("preserves graph commitments and export shapes when consuming file-local IR",
       );
       expect(decoded.module).toEqual(module);
       decodedModules.set(analyzed.file.path, decoded.module);
-      transferred.adoptFileProjection(decoded.projection);
+      transferred.adoptFileProjection(analyzed.file, decoded.projection);
       if (!rejectedInvalidTransfer) {
         await rejectInvalidTransfer(
           wirePath,
@@ -186,6 +191,7 @@ it("preserves graph commitments and export shapes when consuming file-local IR",
       transferred.finishImmutableSteps(
         snapshot.manifest.root_sha256,
         decodedGraph,
+        [],
       ),
     );
     expect(resealed).toEqual(semantic);

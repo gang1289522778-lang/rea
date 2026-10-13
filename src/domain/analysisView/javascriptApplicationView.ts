@@ -156,9 +156,32 @@ const javascriptUnknowns = (
     );
   if (analysis.semantic_graph.unknowns.length > 0)
     unknowns.push(
-      `${String(analysis.semantic_graph.unknowns.length)} semantic graph unknowns remain in the parent Evidence.`,
+      `${String(analysis.semantic_graph.unknowns.length)} semantic graph unknowns remain in the parent Evidence; page semantic_unknowns to read them.`,
+    );
+  const truncatedSources = analysis.semantic_graph.coverage.files.filter(
+    ({ status }) => status !== "complete",
+  ).length;
+  if (truncatedSources > 0)
+    unknowns.push(
+      `${String(truncatedSources)} sources have truncated or unavailable semantic facts; page semantic_files for coverage and known omission counts.`,
+    );
+  const omittedSources = analysis.semantic_graph.coverage.omitted_files ?? 0;
+  if (omittedSources > 0)
+    unknowns.push(
+      `${String(omittedSources)} source coverage rows exceeded the Evidence budget; individual semantic coverage remains unknown.`,
     );
   return unknowns;
+};
+
+const semanticFileStatusCounts = (
+  analysis: JavaScriptApplicationAnalysisResult,
+): Record<string, number> => {
+  const counts: Record<string, number> = {};
+  for (const { status } of analysis.semantic_graph.coverage.files)
+    counts[status] = (counts[status] ?? 0) + 1;
+  if ((analysis.semantic_graph.coverage.omitted_files ?? 0) > 0)
+    counts.omitted = analysis.semantic_graph.coverage.omitted_files ?? 0;
+  return counts;
 };
 
 const parentFields = (
@@ -244,7 +267,7 @@ export const projectJavaScriptApplicationView = (
   if (view.kind !== "summary" && view.kind !== "item" && view.kind !== "page")
     return err(
       jsIncompatible(
-        "JavaScript application Evidence supports summary, module item or module page views.",
+        "JavaScript application Evidence supports summary, module item or page views.",
       ),
     );
   const shared = parentFields(parent, analysis);
@@ -268,12 +291,7 @@ export const projectJavaScriptApplicationView = (
           application: analysis.graph.coverage,
           semantic: {
             ...analysis.semantic_graph.coverage,
-            families: analysis.semantic_graph.coverage.families.map(
-              ({ unknown_ids, ...family }) => ({
-                ...family,
-                unknown_count: unknown_ids.length,
-              }),
-            ),
+            files: semanticFileStatusCounts(analysis),
           },
           application_unknowns: applicationUnknownCount(analysis),
           semantic_unknowns: analysis.semantic_graph.unknowns.length,
@@ -300,7 +318,31 @@ export const projectJavaScriptApplicationView = (
       ...shared,
     });
   }
-  if (view.kind !== "page" || view.collection !== "modules")
+  if (view.collection === "semantic_files") {
+    const files = analysis.semantic_graph.coverage.files;
+    const items = files.slice(view.offset, view.offset + view.limit);
+    return ok({
+      kind: "page",
+      view,
+      items,
+      coverage: pageCoverage(view.offset, items.length, files.length),
+      ...shared,
+    });
+  }
+  if (view.collection === "semantic_unknowns") {
+    const unknowns = analysis.semantic_graph.unknowns;
+    const items = semanticUnknownItems(
+      unknowns.slice(view.offset, view.offset + view.limit),
+    );
+    return ok({
+      kind: "page",
+      view,
+      items,
+      coverage: pageCoverage(view.offset, items.length, unknowns.length),
+      ...shared,
+    });
+  }
+  if (view.collection !== "modules")
     return err(
       jsIncompatible(
         "Section and symbol collections apply to inspect_binary_layout Evidence.",
@@ -321,3 +363,19 @@ export const projectJavaScriptApplicationView = (
     ...shared,
   });
 };
+
+/** Decorate only selected rows; the sealed graph owns their stable order. */
+const semanticUnknownItems = (
+  unknowns: JavaScriptApplicationAnalysisResult["semantic_graph"]["unknowns"],
+): JsonValue[] =>
+  unknowns.map((unknown) => {
+    const { location } = unknown.evidence;
+    const modulePath = !location.available
+      ? null
+      : location.value.kind === "source-range"
+        ? location.value.source
+        : location.value.kind === "artifact-path"
+          ? location.value.path
+          : null;
+    return { module_path: modulePath, ...unknown };
+  });

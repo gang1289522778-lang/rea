@@ -330,7 +330,7 @@ export function* collectSemanticMemberMutationsSteps(
         for (const value of effect === "escape"
           ? escapedReferenceLeaves(expression, current.path)
           : expandedValues(expression, current.path, effect)) {
-          if (value.escapes && effect !== "escape")
+          if (value.escapes === true && effect !== "escape")
             markValue(
               value.node,
               value.path,

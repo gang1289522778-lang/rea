@@ -1,3 +1,4 @@
+import { constants } from "node:buffer";
 import { createHash, randomUUID } from "node:crypto";
 import { readFile, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -7,11 +8,16 @@ import { getHeapStatistics } from "node:v8";
 import { z } from "zod";
 import type { JavaScriptArtifactFile } from "../../domain/javascript/javascriptArtifactFiles.js";
 import type { JavaScriptStaticAnalysis } from "../../domain/javascript/javascriptStaticAnalysisTypes.js";
-import { estimateJavaScriptStaticApplicationProjection } from "../../domain/javascript/javascriptApplicationProjectionResources.js";
+import type { ApplicationCoverage } from "../../domain/javascript/javascriptApplicationEvidenceSchemas.js";
+import {
+  estimateJavaScriptModuleApplicationProjection,
+  estimateJavaScriptStaticApplicationProjection,
+} from "../../domain/javascript/javascriptApplicationProjectionResources.js";
 import type { JavaScriptModuleSemanticIr } from "../../domain/javascript/javascriptModuleSemanticIr.js";
 import type { JavaScriptSemanticFileProjection } from "../../domain/javascript/javascriptSemanticFileProjection.js";
 import type {
   JavaScriptAnalyzedSource,
+  JavaScriptEvidenceAdmission,
   JavaScriptSourceAnalysisFailure,
   JavaScriptSourceAnalysisLimits,
 } from "../../domain/javascript/javascriptSourceAnalysis.js";
@@ -57,7 +63,28 @@ import {
 const OPERATION = "analyze_javascript_application";
 const PROVIDER = "javascript-static-analysis";
 const MIB = 1024 * 1024;
-const STATIC_CHECKPOINT_RETENTION_EXPANSION = 6;
+/** Parsed static facts retain about 1.4x their JSON bytes; see javaScriptTransferRetentionBytes. */
+const STATIC_CHECKPOINT_RETENTION_EXPANSION = 2;
+/**
+ * Peak consumer heap per serialized Evidence byte. Measured on Node 26:
+ * inspect-analysis-view peaked at 1.53 GB RSS for a 249 MB application
+ * Evidence, and compare-application-versions at 2.97 GB for two records
+ * totalling 490 MB.
+ */
+const EVIDENCE_CONSUMER_EXPANSION = 6;
+
+/**
+ * Serialized bytes one application Evidence may occupy so that a consumer with
+ * this process's heap can authenticate two of them at once, as
+ * compare_application_versions does, and so that it fits one V8 string.
+ */
+const javaScriptEvidenceBudgetBytes = (): number =>
+  Math.min(
+    constants.MAX_STRING_LENGTH,
+    Math.floor(
+      getHeapStatistics().heap_size_limit / (2 * EVIDENCE_CONSUMER_EXPANSION),
+    ),
+  );
 const pendingCleanup = new Set<JavaScriptAnalysisWorker>();
 /** The worker runs on this executable; Bun accepts but ignores V8 heap flags. */
 const WORKER_HEAP_FLAGS_ENFORCED =
@@ -80,7 +107,35 @@ export class JavaScriptAnalysisWorker {
   #applicationProjectionFailure: AnalysisResourceConstraintError | undefined;
   #parentCapacityExhausted = false;
   #sourcesRemaining: number | undefined;
+  /** Source bytes of every file not yet analyzed; semantic facts grow with them. */
+  #sourceBytesRemaining: number;
   readonly #resultBudgetBytes: number;
+  readonly #evidenceBudgetBytes = javaScriptEvidenceBudgetBytes();
+  #evidenceChargedBytes = 0;
+  readonly evidenceBudget: JavaScriptEvidenceAdmission = {
+    remainingBytes: (): number =>
+      Math.max(0, this.#evidenceBudgetBytes - this.#evidenceChargedBytes),
+    reserveBytes: (bytes: number): boolean => {
+      if (!Number.isSafeInteger(bytes) || bytes < 0)
+        throw new RangeError(
+          "Evidence reservation requires nonnegative safe bytes",
+        );
+      if (bytes > this.evidenceBudget.remainingBytes()) return false;
+      this.#evidenceChargedBytes += bytes;
+      return true;
+    },
+    releaseBytes: (bytes: number): void => {
+      if (
+        !Number.isSafeInteger(bytes) ||
+        bytes < 0 ||
+        bytes > this.#evidenceChargedBytes
+      )
+        throw new RangeError(
+          "Evidence release exceeds its retained reservation",
+        );
+      this.#evidenceChargedBytes -= bytes;
+    },
+  };
   /** Null when the runtime enforces the V8 heap flags instead. */
   readonly #processMemoryLimitBytes: number | null;
   readonly #onStdout = (chunk: Buffer | string): void => {
@@ -113,7 +168,7 @@ export class JavaScriptAnalysisWorker {
   constructor(
     readonly limits: JavaScriptSourceAnalysisLimits = DEFAULTS,
     readonly launcher: typeof spawnOwnedProviderProcess = spawnOwnedProviderProcess,
-    sourceCount?: number,
+    sources?: readonly Pick<JavaScriptArtifactFile, "bytes">[],
   ) {
     if (
       !Number.isSafeInteger(limits.heapMb) ||
@@ -126,14 +181,9 @@ export class JavaScriptAnalysisWorker {
       throw new RangeError(
         "JavaScript worker requires valid heap and execution limits",
       );
-    if (
-      sourceCount !== undefined &&
-      (!Number.isSafeInteger(sourceCount) || sourceCount < 0)
-    )
-      throw new RangeError(
-        "JavaScript worker source count must be a nonnegative safe integer",
-      );
-    this.#sourcesRemaining = sourceCount;
+    this.#sourcesRemaining = sources?.length;
+    this.#sourceBytesRemaining =
+      sources?.reduce((total, { bytes }) => total + bytes, 0) ?? 0;
     this.#processMemoryLimitBytes = javaScriptWorkerMemoryLimitBytes(
       limits.heapMb,
     );
@@ -153,7 +203,7 @@ export class JavaScriptAnalysisWorker {
   /** Analyze inert source; hard worker failure does not terminate this process. */
   async analyze(
     file: JavaScriptArtifactFile,
-    nodeBudget: number,
+    nodeBudget: number | null,
     signal?: AbortSignal,
   ): Promise<
     Result<JavaScriptAnalyzedSource, JavaScriptSourceAnalysisFailure>
@@ -166,6 +216,8 @@ export class JavaScriptAnalysisWorker {
     this.#parentCapacityExhausted = false;
     if (this.#sourcesRemaining !== undefined)
       this.#sourcesRemaining = Math.max(0, this.#sourcesRemaining - 1);
+    const sourceBytesRemaining = this.#sourceBytesRemaining;
+    this.#sourceBytesRemaining = Math.max(0, sourceBytesRemaining - file.bytes);
     let deadline: ProviderStartupDeadline | undefined;
     let result: Result<
       JavaScriptAnalyzedSource,
@@ -260,6 +312,10 @@ export class JavaScriptAnalysisWorker {
           const admission = javaScriptWorkerAdmissionSchema.parse({
             id,
             semantic_result_budget_bytes: offeredResultBudget,
+            semantic_graph_bytes:
+              offeredResultBudget === 0
+                ? 0
+                : this.#evidenceShare(file.bytes, sourceBytesRemaining),
           });
           await new Promise<void>((resolve, reject) =>
             stdin.write(`${JSON.stringify(admission)}\n`, (error) =>
@@ -347,8 +403,38 @@ export class JavaScriptAnalysisWorker {
         );
         module = decoded.module;
         projection = decoded.projection;
+        const applicationBytes = estimateJavaScriptModuleApplicationProjection(
+          module,
+          file.path,
+          Math.max(
+            0,
+            remaining - moduleEstimate - (retainGraph ? graphEstimate : 0),
+          ),
+        );
+        if (
+          moduleEstimate +
+            (retainGraph ? graphEstimate : 0) +
+            applicationBytes >
+            remaining ||
+          !this.evidenceBudget.reserveBytes(applicationBytes)
+        ) {
+          module = null;
+          projection = null;
+          throw new AnalysisResourceConstraintError(
+            OPERATION,
+            "memory",
+            "Exported application facts exceed the remaining Evidence budget",
+            {
+              ...this.#limits(),
+              application_projection_estimated_bytes_lower_bound:
+                applicationBytes,
+            },
+          );
+        }
         this.#estimatedRetainedBytes +=
-          moduleEstimate + (retainGraph ? graphEstimate : 0);
+          moduleEstimate + (retainGraph ? graphEstimate : 0) + applicationBytes;
+        this.#evidenceChargedBytes +=
+          decoded.projection?.coverage.retained_graph_bytes ?? 0;
         result = retainGraph
           ? ok({ javascript, module, projection: decoded.projection })
           : err({
@@ -602,9 +688,12 @@ export class JavaScriptAnalysisWorker {
       sourcePath,
     );
     const availableResultBudget = this.#remainingResultBudget();
-    if (expandedBytes <= availableResultBudget)
+    if (
+      expandedBytes <= availableResultBudget &&
+      this.evidenceBudget.reserveBytes(expandedBytes)
+    ) {
       this.#estimatedRetainedBytes += expandedBytes;
-    else
+    } else
       this.#applicationProjectionFailure = new AnalysisResourceConstraintError(
         OPERATION,
         "memory",
@@ -620,6 +709,33 @@ export class JavaScriptAnalysisWorker {
         },
       );
     return facts;
+  }
+
+  /** Limits that offered each source its serialized semantic-fact budget. */
+  coverageLimits(): ApplicationCoverage["limits"] {
+    return [
+      {
+        name: "javascript_analysis_evidence_budget_bytes",
+        value: this.#evidenceBudgetBytes,
+        unit: "bytes",
+      },
+    ];
+  }
+
+  /**
+   * Share of the remaining Evidence budget in proportion to this source's
+   * bytes among the sources not yet analyzed, since projected semantic facts
+   * grow with source length. Bytes an earlier source left unused remain
+   * available to later sources.
+   */
+  #evidenceShare(bytes: number, sourceBytesRemaining: number): number {
+    const remaining = Math.max(
+      0,
+      this.#evidenceBudgetBytes - this.#evidenceChargedBytes,
+    );
+    return sourceBytesRemaining <= bytes
+      ? remaining
+      : Math.floor((remaining * bytes) / sourceBytesRemaining);
   }
 
   #limits() {

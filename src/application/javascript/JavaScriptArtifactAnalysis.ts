@@ -145,7 +145,17 @@ export const analyzeAndAdoptJavaScriptArtifactFiles = async (
   const selectedFileCount =
     fileSet.files.length - (fileSet.source_selection?.unselected_files ?? 0);
   let selectedFileIndex = 0;
-  for (const file of fileSet.files) {
+  // Selected sources own the available semantic capacity before inventory-only unknowns.
+  const selectedFirst = function* () {
+    for (const outside of [false, true])
+      for (const file of fileSet.files)
+        if (
+          (!file.text.included &&
+            file.text.reason === "outside-analysis-scope") === outside
+        )
+          yield file;
+  };
+  for (const file of selectedFirst()) {
     try {
       await setImmediate();
       if (classifyOutsideAnalysisScope(file, state, projection)) {
@@ -179,7 +189,7 @@ export const analyzeAndAdoptJavaScriptArtifactFiles = async (
       const facts = result.ok ? result.value : result.error;
       const applicationProjectionFailure = facts.applicationProjectionFailure;
       if (facts.projection !== null)
-        projection.adoptFileProjection(facts.projection);
+        projection.adoptFileProjection(file, facts.projection);
       const error = result.ok ? null : result.error.error;
       const limits =
         error instanceof AnalysisResourceConstraintError
@@ -210,11 +220,12 @@ export const analyzeAndAdoptJavaScriptArtifactFiles = async (
               },
             }),
       });
-      if (failure !== undefined && facts.projection === null)
+      if (facts.projection === null)
         projection.recordUnavailableFile(
           file,
-          failure.reason,
-          failure.limits,
+          failure?.reason ??
+            `${file.path}: Source did not produce semantic IR.`,
+          failure?.limits ?? null,
           error instanceof AnalysisResourceConstraintError ||
             error instanceof AnalysisTimeoutError
             ? "resource-limit"
@@ -294,8 +305,9 @@ export const analyzeAndAdoptJavaScriptArtifactFiles = async (
       if (file.kind === "javascript")
         projection.recordUnavailableFile(
           file,
-          failure.reason,
-          failure.limits,
+          failure?.reason ??
+            `${file.path}: Source did not produce semantic IR.`,
+          failure?.limits ?? null,
           interruption instanceof AnalysisResourceConstraintError ||
             interruption instanceof AnalysisTimeoutError
             ? "resource-limit"

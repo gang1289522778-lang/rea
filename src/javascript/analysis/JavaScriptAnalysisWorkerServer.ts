@@ -22,16 +22,27 @@ import {
   type JavaScriptWorkerMessage,
 } from "./JavaScriptAnalysisWorkerProtocol.js";
 
+/** Parent capacity offered after static facts were retained. */
+export interface JavaScriptWorkerSemanticAdmission {
+  /** Heap the parent can retain for module facts and the semantic graph. */
+  readonly resultBytes: number;
+  /** Serialized semantic-fact bytes this source may add to the Evidence. */
+  readonly graphBytes: number;
+}
+
 /** Trusted composition callback; this provider owns framing and temporary I/O. */
 export interface JavaScriptSourceWorkerAnalyzer {
   (
     file: JavaScriptArtifactFile,
-    nodeBudget: number,
+    nodeBudget: number | null,
     callbacks: {
       readonly phase: (
         phase: "parse" | "static" | "semantic" | "projection",
       ) => Promise<void>;
-      readonly checkpoint: (facts: JavaScriptStaticAnalysis) => Promise<number>;
+      /** Retain static facts; resolve the parent's offered semantic budgets. */
+      readonly checkpoint: (
+        facts: JavaScriptStaticAnalysis,
+      ) => Promise<JavaScriptWorkerSemanticAdmission>;
     },
   ): Promise<{
     readonly module: JavaScriptModuleSemanticIr;
@@ -153,7 +164,10 @@ const analyzeJob = async (
               "JavaScript worker admission names a different source job",
             );
           resultBudgetBytes = admission.semantic_result_budget_bytes;
-          return resultBudgetBytes;
+          return {
+            resultBytes: resultBudgetBytes,
+            graphBytes: admission.semantic_graph_bytes,
+          };
         },
       },
     );

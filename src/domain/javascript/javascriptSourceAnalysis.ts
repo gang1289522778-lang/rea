@@ -1,6 +1,7 @@
 import type { AnalysisError } from "../analysisErrorBase.js";
 import type { AnalysisResourceConstraintError } from "../analysisErrorCore.js";
 import type { Result } from "../result.js";
+import type { ApplicationCoverage } from "./javascriptApplicationEvidenceSchemas.js";
 import type { JavaScriptArtifactFile } from "./javascriptArtifactFiles.js";
 import type { JavaScriptStaticAnalysis } from "./javascriptStaticAnalysisTypes.js";
 import type { JavaScriptModuleSemanticIr } from "./javascriptModuleSemanticIr.js";
@@ -29,12 +30,23 @@ export interface JavaScriptSourceAnalysisLimits {
   readonly timeoutMs: number;
 }
 
+/** One owner for serialized Evidence capacity shared with final projection. */
+export interface JavaScriptEvidenceAdmission {
+  remainingBytes(): number;
+  reserveBytes(bytes: number): boolean;
+  releaseBytes(bytes: number): void;
+}
+
 /** Sequential source-analysis authority with independently verified cleanup. */
 export interface JavaScriptSourceAnalysisPort {
+  readonly evidenceBudget?: JavaScriptEvidenceAdmission;
+  /** `nodeBudget` is the caller-selected node capacity offered to this source, or null. */
   analyze(
     file: JavaScriptArtifactFile,
-    nodeBudget: number,
+    nodeBudget: number | null,
     signal?: AbortSignal,
   ): Promise<Result<JavaScriptAnalyzedSource, JavaScriptSourceAnalysisFailure>>;
+  /** Limits that offered each analyzed source its semantic-fact byte budget. */
+  coverageLimits(): ApplicationCoverage["limits"];
   close(): Promise<void>;
 }

@@ -11,6 +11,7 @@ import {
   javaScriptSemanticUnknownSchema,
   javaScriptSemanticFingerprintSchema,
   javaScriptSemanticEvidenceContextSchema,
+  javaScriptSemanticFileProjectionCoverageSchema,
 } from "../../domain/javascript/javascriptSemanticGraphSchemas.js";
 
 const range =
@@ -639,7 +640,7 @@ export const javaScriptWorkerGraphRecordSchema = z.discriminatedUnion("kind", [
 /** Portable per-file header, before any graph binding or immutable proof. */
 export const javaScriptWorkerProjectionHeaderSchema = z.strictObject({
   roots: z.array(javaScriptSemanticNodeSchema.shape.node_id),
-  truncated: z.boolean(),
+  coverage: javaScriptSemanticFileProjectionCoverageSchema,
 });
 
 /** Module facts are transferred individually to avoid a whole-IR JSON string. */

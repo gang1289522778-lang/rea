@@ -1,3 +1,5 @@
+import type { JavaScriptModuleSemanticIr } from "./javascriptModuleSemanticIr.js";
+import { estimateSemanticReturnValueBytes } from "./javascriptSemanticReturns.js";
 import type { JavaScriptStaticAnalysis } from "./javascriptStaticAnalysisTypes.js";
 
 /** Forecast static-fact expansion into observations, nodes and relationships. */
@@ -46,5 +48,57 @@ export const estimateJavaScriptStaticApplicationProjection = (
       2;
   }
   const metadataBytes = 2048 + Buffer.byteLength(sourcePath) * 4;
-  return (checkpointBytes * 4 + repeatedBytes + records * metadataBytes) * 8;
+  // Measured on a complete Grok Bot app.asar analysis: the sum of these
+  // forecasts was 89 MB for 73 MB of retained application-graph objects.
+  return checkpointBytes * 4 + repeatedBytes + records * metadataBytes;
+};
+
+/** Forecast exported facts without materializing flattened shapes or ancestor paths. */
+export const estimateJavaScriptModuleApplicationProjection = (
+  module: JavaScriptModuleSemanticIr,
+  sourcePath: string,
+  allowance = Number.MAX_SAFE_INTEGER - 1,
+): number => {
+  const shapesByCallable = new Map<string, number>();
+  const callables = new Map(
+    module.callables.map((callable) => [callable.callableId, callable]),
+  );
+  const pathBytes = Buffer.byteLength(JSON.stringify(sourcePath));
+  const limitationsBytes = Buffer.byteLength(
+    JSON.stringify(module.limitations),
+  );
+  let bytes = 0;
+  for (const link of module.moduleLinks) {
+    bytes +=
+      8 * (2048 + pathBytes * 4) + Buffer.byteLength(JSON.stringify(link)) * 4;
+    if (bytes > allowance) return allowance + 1;
+    if (link.callableId === null || link.exportedName === null) continue;
+    let shapeBytes = shapesByCallable.get(link.callableId);
+    if (shapeBytes === undefined) {
+      shapeBytes = 0;
+      const callable = callables.get(link.callableId);
+      if (callable !== undefined) {
+        shapeBytes =
+          4096 +
+          pathBytes +
+          limitationsBytes +
+          Buffer.byteLength(JSON.stringify(callable.location)) +
+          Buffer.byteLength(JSON.stringify(callable.callableId));
+        for (const site of callable.returnSites) {
+          shapeBytes += 256 + Buffer.byteLength(JSON.stringify(site.location));
+          const remaining = Math.max(
+            0,
+            Math.floor((allowance - bytes) / 4) - shapeBytes,
+          );
+          shapeBytes += estimateSemanticReturnValueBytes(site.value, remaining);
+          if (bytes + shapeBytes * 4 > allowance) return allowance + 1;
+        }
+      }
+      shapesByCallable.set(link.callableId, shapeBytes);
+    }
+    bytes +=
+      (shapeBytes + Buffer.byteLength(JSON.stringify(link.exportedName))) * 4;
+    if (bytes > allowance) return allowance + 1;
+  }
+  return bytes;
 };

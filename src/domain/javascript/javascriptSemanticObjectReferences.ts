@@ -19,6 +19,7 @@ import { compareUnicodeCodePoints } from "../unicodeCodePointOrder.js";
 export interface JavaScriptSemanticObjectReference {
   readonly node: t.Node;
   readonly path: PropertyPath;
+  /** The value may be reached at any depth; consumers record an escape. */
   readonly escapes?: true;
   /** The allocation owned by this binding, rather than a read of its prior value. */
   readonly ownerInitializer?: t.Node;
@@ -230,12 +231,16 @@ export const semanticClassPropertyReferences = (
   selection: PropertyPath,
   state: JavaScriptSemanticAnalysisState,
   activeGetters: ReadonlyMap<t.Node, number> = new Map(),
+  throughUnknownKey = false,
 ): readonly JavaScriptSemanticObjectReference[] => {
   const root = lookup.owner;
   const receiver = lookup.receiver ?? root;
   const [key, ...path] = selection;
   const propertyName =
     key == null || typeof key === "object" ? null : String(key);
+  // Widen a second unknown getter hop instead of enumerating getter orderings.
+  if (propertyName === null && throughUnknownKey && !lookup.fieldsOnly)
+    return escapedClassValues(lookup, state);
   const pending: (t.ClassDeclaration | t.ClassExpression)[] = [root];
   const seen = new Set<t.Node>();
   const possibleResults: JavaScriptSemanticObjectReference[] = [];
@@ -250,7 +255,7 @@ export const semanticClassPropertyReferences = (
       state,
       lookup.initializedBefore,
     );
-    possibleResults.push(...fields.references);
+    for (const reference of fields.references) possibleResults.push(reference);
     instanceFields = fields.definiteNames;
     if (propertyName !== null && instanceFields.has(propertyName))
       return possibleResults;
@@ -271,14 +276,14 @@ export const semanticClassPropertyReferences = (
     for (const getter of lookup.fieldsOnly ? [] : descriptors.getters) {
       const key = semanticStaticPropertyKey(getter.key, getter.computed);
       if (key !== null && instanceFields.has(key)) continue;
-      possibleResults.push(
-        ...getterResultReferences(
-          { getter, owner: klass, receiver },
-          path,
-          state,
-          activeGetters,
-        ),
-      );
+      for (const reference of getterResultReferences(
+        { getter, owner: klass, receiver },
+        path,
+        state,
+        activeGetters,
+        throughUnknownKey || propertyName === null,
+      ))
+        possibleResults.push(reference);
     }
     // An exact own descriptor suppresses inherited lookup. Dynamic computed
     // descriptors may or may not match, so retain possible superclass results.
@@ -287,9 +292,112 @@ export const semanticClassPropertyReferences = (
       klass.superClass !== null &&
       klass.superClass !== undefined
     )
-      pending.push(...semanticClassCandidates(klass.superClass, state));
+      for (const base of semanticClassCandidates(klass.superClass, state))
+        pending.push(base);
   }
-  return possibleResults;
+  return uniqueReferences(possibleResults);
+};
+
+/** Widen receiver-resolved fields/getter results once, without enumerating getter paths. */
+const escapedClassValues = (
+  lookup: ClassPropertyLookup,
+  state: JavaScriptSemanticAnalysisState,
+): readonly JavaScriptSemanticObjectReference[] => {
+  const values: JavaScriptSemanticObjectReference[] = [];
+  const classes = [lookup.receiver ?? lookup.owner];
+  const seenClasses = new Set<t.Node>();
+  const expressions: t.Node[] = [];
+  if (lookup.kind === "instance")
+    for (const reference of instanceFieldReferences(
+      lookup.receiver ?? lookup.owner,
+      null,
+      [],
+      state,
+    ).references)
+      expressions.push(reference.node);
+  for (let cursor = 0; cursor < classes.length; cursor++) {
+    const klass = classes[cursor];
+    if (klass === undefined || seenClasses.has(klass)) continue;
+    seenClasses.add(klass);
+    for (const member of klass.body.body) {
+      if (
+        (t.isClassProperty(member) || t.isClassPrivateProperty(member)) &&
+        member.static === (lookup.kind === "static") &&
+        member.value != null
+      )
+        expressions.push(member.value);
+      if (
+        (t.isClassMethod(member) || t.isClassPrivateMethod(member)) &&
+        member.static === (lookup.kind === "static")
+      )
+        for (const { node } of semanticCallableResultExpressions(member))
+          if (node !== null) expressions.push(node);
+    }
+    if (klass.superClass != null)
+      classes.push(...semanticClassCandidates(klass.superClass, state));
+  }
+  const seen = new Set<t.Node>();
+  for (let cursor = 0; cursor < expressions.length; cursor++) {
+    const input = expressions[cursor];
+    if (input === undefined) continue;
+    const node = unwrapJavaScriptExpression(input).node;
+    if (seen.has(node)) continue;
+    seen.add(node);
+    if (t.isThisExpression(node) || t.isSuper(node)) continue;
+    if (t.isMemberExpression(node) || t.isOptionalMemberExpression(node)) {
+      // Widening the receiver's data values covers every selected descendant.
+      // `this` and private fields have already been resolved by the class pass.
+      expressions.push(node.object);
+      continue;
+    }
+    if (t.isConditionalExpression(node)) {
+      expressions.push(node.consequent, node.alternate);
+      continue;
+    }
+    if (t.isLogicalExpression(node)) {
+      expressions.push(node.left, node.right);
+      continue;
+    }
+    if (t.isSequenceExpression(node)) {
+      const last = node.expressions.at(-1);
+      if (last !== undefined) expressions.push(last);
+      continue;
+    }
+    if (t.isObjectExpression(node))
+      for (const property of node.properties)
+        if (t.isObjectProperty(property)) expressions.push(property.value);
+        else if (t.isSpreadElement(property))
+          expressions.push(property.argument);
+    if (t.isArrayExpression(node))
+      for (const element of node.elements)
+        if (element !== null)
+          expressions.push(
+            t.isSpreadElement(element) ? element.argument : element,
+          );
+    values.push({ node, path: [], escapes: true });
+  }
+  return uniqueReferences(values);
+};
+
+/** Drop repeated node and path pairs while keeping first-seen order. */
+const uniqueReferences = (
+  references: readonly JavaScriptSemanticObjectReference[],
+): JavaScriptSemanticObjectReference[] => {
+  const seen = new Map<t.Node, Map<t.Node | undefined, Set<string>>>();
+  return references.filter((reference) => {
+    const identity = JSON.stringify([
+      reference.path,
+      reference.escapes ?? false,
+    ]);
+    const owners =
+      seen.get(reference.node) ?? new Map<t.Node | undefined, Set<string>>();
+    const paths = owners.get(reference.ownerInitializer) ?? new Set<string>();
+    if (paths.has(identity)) return false;
+    paths.add(identity);
+    owners.set(reference.ownerInitializer, paths);
+    seen.set(reference.node, owners);
+    return true;
+  });
 };
 
 const objectReceiverReference = (
@@ -473,6 +581,7 @@ const getterResultReferences = (
   path: PropertyPath,
   state: JavaScriptSemanticAnalysisState,
   activeGetters: ReadonlyMap<t.Node, number> = new Map(),
+  throughUnknownKey = false,
 ): readonly JavaScriptSemanticObjectReference[] => {
   const { getter, owner, receiver = owner } = invocation;
   const previousLength = activeGetters.get(getter);
@@ -653,6 +762,7 @@ const getterResultReferences = (
             remaining,
             state,
             active,
+            throughUnknownKey,
           )
         : objectReceiverReference(receiver, remaining, state))
         retain(reference);
@@ -701,6 +811,7 @@ const getterResultReferences = (
             [key, ...remaining],
             state,
             active,
+            throughUnknownKey,
           ))
             retain(reference);
         continue;
@@ -736,7 +847,7 @@ const getterResultReferences = (
     else if (current.privateRead !== undefined) retainPrivateRead();
     else retain({ node: expression, path: remaining });
   }
-  return references;
+  return uniqueReferences(references);
 };
 
 export const semanticObjectPropertyReferences = (
@@ -797,13 +908,12 @@ export const semanticObjectPropertyReferences = (
       continue;
     if (name === null || semanticPropertyPathKeyMatches(key ?? null, name)) {
       if (t.isObjectMethod(property) && property.kind === "get") {
-        references.push(
-          ...getterResultReferences(
-            { getter: property, owner: node },
-            remaining,
-            state,
-          ),
-        );
+        for (const reference of getterResultReferences(
+          { getter: property, owner: node },
+          remaining,
+          state,
+        ))
+          references.push(reference);
       } else if (t.isObjectMethod(property) && property.kind === "set") {
         // A setter contributes no readable reference. A paired getter is
         // handled independently when it appears earlier in this object.

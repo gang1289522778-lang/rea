@@ -1,3 +1,4 @@
+import { estimateJavaScriptModuleApplicationProjection } from "../domain/javascript/javascriptApplicationProjectionResources.js";
 import { moduleResolutionModeForJavaScriptReference } from "../domain/javascript/javascriptModuleResolutionMode.js";
 import { parseJavaScriptSource } from "../domain/javascript/javascriptSourceParser.js";
 import { analyzeParsedJavaScriptStaticSourceSteps } from "../domain/javascript/javascriptStaticAnalysis.js";
@@ -8,6 +9,7 @@ import {
 import { failedJavaScriptStaticAnalysis } from "../domain/javascript/javascriptStaticAnalysisHelpers.js";
 import { projectJavaScriptModuleSemantics } from "../domain/javascript/javascriptModuleSemanticIr.js";
 import {
+  javaScriptGraphBytesWithinRetention,
   javaScriptTransferByteBudget,
   measureJavaScriptModuleTransfer,
 } from "../javascript/analysis/JavaScriptAnalysisTransfer.js";
@@ -43,7 +45,8 @@ const analyze: JavaScriptSourceWorkerAnalyzer = async (
       receivers,
     ),
   );
-  const resultBudgetBytes = await callbacks.checkpoint(facts);
+  const admission = await callbacks.checkpoint(facts);
+  const resultBudgetBytes = admission.resultBytes;
   if (facts.parse_status === "failed") return null;
   if (resultBudgetBytes === 0)
     throw new AnalysisResourceConstraintError(
@@ -80,6 +83,20 @@ const analyze: JavaScriptSourceWorkerAnalyzer = async (
     projectJavaScriptSemanticFileSteps(
       file,
       ir,
+      Math.min(
+        Math.max(
+          0,
+          admission.graphBytes -
+            estimateJavaScriptModuleApplicationProjection(
+              module,
+              file.path,
+              admission.graphBytes,
+            ),
+        ),
+        javaScriptGraphBytesWithinRetention(
+          resultBudgetBytes - measured.retentionBytes,
+        ),
+      ),
       nodeBudget,
       facts.electron.call_paths,
     ),
