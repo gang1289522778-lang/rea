@@ -32,18 +32,23 @@ import {
 } from "../domain/rawBinary.js";
 import type { BinaryArchitecture } from "../domain/binaryTargetTypes.js";
 import { observeMzWindowsHeader } from "../domain/dosMz.js";
-import { hasBinaryPlistSignature } from "../domain/apple/appleArchiveFormat.js";
+import {
+  hasBinaryPlistSignature,
+  createXmlPlistSignatureProbe,
+  MAX_XML_PLIST_PROBE_BYTES,
+} from "../domain/apple/appleArchiveFormat.js";
 import {
   hasZipSignature,
   isZipPackageFormat,
   zipPackageFormatForPath,
 } from "../domain/zipPackageFormat.js";
-
 import {
   parseExecutableHeader,
   parsePeRecord,
   type ExecutableMetadata,
 } from "../domain/binaryTarget.js";
+
+const XML_PLIST_PROBE_CHUNK_BYTES = 64 * 1024;
 
 /** Options for resolving a local binary target and its stable identity. */
 export interface BinaryTargetResolverOptions {
@@ -279,12 +284,12 @@ const detectArtifactFormat = async (
 > => {
   throwIfTargetResolutionCancelled(signal);
   const lower = path.toLowerCase();
-  const magic = Buffer.alloc(8);
+  const magic = Buffer.alloc(4096);
   const observed = await handle.read(magic, 0, magic.length, 0);
   throwIfTargetResolutionCancelled(signal);
   if (
-    observed.bytesRead === 8 &&
-    magic.equals(Buffer.from([0, 0x61, 0x73, 0x6d, 1, 0, 0, 0]))
+    observed.bytesRead >= 8 &&
+    magic.subarray(0, 8).equals(Buffer.from([0, 0x61, 0x73, 0x6d, 1, 0, 0, 0]))
   )
     throw new BinaryTargetError(
       path,
@@ -319,6 +324,37 @@ const detectArtifactFormat = async (
       if (read.bytesRead === 4 && trailer.equals(Buffer.from("koly")))
         return "dmg";
     }
+  }
+  // XML plist documents can also use archive-specific suffixes such as .archive.
+  // Keep this after container trailer checks so a DMG retains its authority.
+  const xmlProbe = createXmlPlistSignatureProbe();
+  let xmlState = xmlProbe.write(magic.subarray(0, observed.bytesRead));
+  if (xmlState === "matched") return "plist";
+  const chunk = Buffer.alloc(XML_PLIST_PROBE_CHUNK_BYTES);
+  let bytesRead = observed.bytesRead;
+  while (xmlState === "pending" && bytesRead < MAX_XML_PLIST_PROBE_BYTES) {
+    throwIfTargetResolutionCancelled(signal);
+    const read = await handle.read(
+      chunk,
+      0,
+      Math.min(chunk.length, MAX_XML_PLIST_PROBE_BYTES - bytesRead),
+      bytesRead,
+    );
+    throwIfTargetResolutionCancelled(signal);
+    if (read.bytesRead === 0) break;
+    bytesRead += read.bytesRead;
+    xmlState = xmlProbe.write(chunk.subarray(0, read.bytesRead));
+    if (xmlState === "matched") return "plist";
+  }
+  if (bytesRead === MAX_XML_PLIST_PROBE_BYTES) {
+    const { size } = await handle.stat();
+    throwIfTargetResolutionCancelled(signal);
+    if (size > bytesRead)
+      throw new BinaryTargetError(
+        path,
+        "XML plist prolog was not found within the 1 MiB format probe limit",
+        { constraint: "file_format_rejected" },
+      );
   }
   return undefined;
 };

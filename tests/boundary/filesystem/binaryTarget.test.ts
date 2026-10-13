@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { open } from "node:fs/promises";
 import {
   chmod,
   mkdir,
@@ -11,7 +12,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 
 import { buildBinary } from "plist";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { parseBinaryTarget } from "../../../src/application/BinaryTargetResolver.js";
 import {
@@ -26,6 +27,7 @@ import {
   thinMach,
 } from "../../../src/domain/binaryTarget.fixture.js";
 import { projectAnalysisError } from "../../../src/domain/analysisErrorProjection.js";
+import { hasXmlPlistSignature } from "../../../src/domain/apple/appleArchiveFormat.js";
 import { createEvidence, parseEvidence } from "../../../src/domain/evidence.js";
 import { createTestTempDirectory } from "../../fixtures/temporaryDirectory.js";
 
@@ -256,6 +258,181 @@ describe("binary target I/O: package classification", () => {
       format: "plist",
     });
   });
+
+  it("classifies an XML plist by content while preserving named artifact formats", async () => {
+    const directory = await createTestTempDirectory("rea-xml-plist-target-");
+    const xml = Buffer.from(
+      '<?xml version="1.0"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>$archiver</key><string>NSKeyedArchiver</string></dict></plist>',
+    );
+    const archive = join(directory, "Model.archive");
+    const javascript = join(directory, "Model.js");
+    await writeFile(archive, xml);
+    await writeFile(javascript, xml);
+
+    const detected = await parseBinaryTarget(archive);
+    const named = await parseBinaryTarget(javascript);
+    expect(detected.ok && detected.value).toMatchObject({
+      kind: "artifact",
+      format: "plist",
+    });
+    expect(named.ok && named.value).toMatchObject({
+      kind: "artifact",
+      format: "javascript",
+    });
+  });
+});
+
+describe("binary target I/O: XML plist probe", () => {
+  it("scans repeated comments without backtracking on a non-plist prefix", () => {
+    const bytes = Buffer.from(`${"<!--x-->".repeat(30)}x`);
+
+    expect(hasXmlPlistSignature(bytes)).toBe(false);
+  });
+
+  it.each(["plist-view", "plist:view", "plist.view", "plisté"])(
+    "does not mistake the XML name %s for plist",
+    (name) => {
+      expect(hasXmlPlistSignature(Buffer.from(`<${name}>`))).toBe(false);
+    },
+  );
+
+  it("continues probing through legal XML whitespace beyond the initial window", async () => {
+    const directory = await createTestTempDirectory("rea-xml-long-prolog-");
+    const path = join(directory, "Model.archive");
+    await writeFile(
+      path,
+      `<?xml version="1.0"?>${" ".repeat(8192)}<plist><dict/></plist>`,
+    );
+
+    const result = await parseBinaryTarget(path);
+    expect(result.ok && result.value).toMatchObject({
+      kind: "artifact",
+      format: "plist",
+    });
+  });
+
+  it("keeps an observed XML plist signature when later probe bytes are malformed", async () => {
+    const directory = await createTestTempDirectory("rea-xml-malformed-tail-");
+    const path = join(directory, "Model.archive");
+    await writeFile(
+      path,
+      Buffer.concat([
+        Buffer.from('<?xml version="1.0"?><plist><dict/>'),
+        Buffer.from([0xff]),
+      ]),
+    );
+
+    const result = await parseBinaryTarget(path);
+    expect(result.ok && result.value).toMatchObject({
+      kind: "artifact",
+      format: "plist",
+    });
+  });
+
+  it("preserves cancellation while checking the XML probe size limit", async () => {
+    const directory = await createTestTempDirectory("rea-xml-probe-cancel-");
+    const path = join(directory, "Model.archive");
+    await writeFile(
+      path,
+      Buffer.concat([
+        Buffer.from("<!--"),
+        Buffer.alloc(1024 * 1024 - 8, 0x78),
+        Buffer.from("-->x"),
+      ]),
+    );
+    const probe = await open(path, "r");
+    const handlePrototype = Object.getPrototypeOf(probe) as Pick<
+      typeof probe,
+      "stat"
+    >;
+    await probe.close();
+    const originalStat = handlePrototype.stat;
+    const controller = new AbortController();
+    let statCalls = 0;
+    vi.spyOn(handlePrototype, "stat").mockImplementation(async function (
+      this: typeof probe,
+      ...args
+    ) {
+      statCalls += 1;
+      const result = await originalStat.apply(this, args);
+      if (statCalls === 3) controller.abort();
+      return result;
+    });
+
+    try {
+      const result = await parseBinaryTarget(path, {
+        signal: controller.signal,
+      });
+      expect(result).toMatchObject({
+        ok: false,
+        error: { _tag: "AnalysisCancelledError" },
+      });
+      expect(statCalls).toBe(3);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+});
+
+describe("binary target I/O: package classification", () => {
+  it("keeps a DMG classification when its data starts with an XML plist prolog", async () => {
+    const directory = await createTestTempDirectory("rea-xml-dmg-target-");
+    const path = join(directory, "image.dmg");
+    const image = Buffer.alloc(1024);
+    Buffer.from('<?xml version="1.0"?><plist>').copy(image);
+    image.write("koly", image.length - 512, "ascii");
+    await writeFile(path, image);
+
+    const result = await parseBinaryTarget(path);
+    expect(result.ok && result.value).toMatchObject({
+      kind: "archive",
+      format: "dmg",
+    });
+  });
+
+  it.each(["utf8", "utf16le", "utf16be"] as const)(
+    "accepts XML plists when a Unicode character crosses the probe boundary (%s)",
+    async (encoding) => {
+      const directory = await createTestTempDirectory("rea-xml-boundary-");
+      const path = join(directory, "Model.archive");
+      let xml: Buffer;
+      if (encoding === "utf8") {
+        const prefix = Buffer.from('<?xml version="1.0"?><plist><string>');
+        xml = Buffer.concat([
+          prefix,
+          Buffer.alloc(4095 - prefix.length, 0x20),
+          Buffer.from("😀</string></plist>"),
+        ]);
+      } else {
+        const encodeUtf16 = (value: string): Buffer => {
+          const littleEndian = Buffer.from(value, "utf16le");
+          if (encoding === "utf16le") return littleEndian;
+          const bigEndian = Buffer.from(littleEndian);
+          for (let index = 0; index < bigEndian.length; index += 2)
+            [bigEndian[index], bigEndian[index + 1]] = [
+              bigEndian[index + 1]!,
+              bigEndian[index]!,
+            ];
+          return bigEndian;
+        };
+        const prefix = encodeUtf16(
+          '\ufeff<?xml version="1.0"?><plist><string>',
+        );
+        xml = Buffer.concat([
+          prefix,
+          encodeUtf16(" ".repeat((4094 - prefix.length) / 2)),
+          encodeUtf16("😀</string></plist>"),
+        ]);
+      }
+      await writeFile(path, xml);
+
+      const result = await parseBinaryTarget(path);
+      expect(result.ok && result.value).toMatchObject({
+        kind: "artifact",
+        format: "plist",
+      });
+    },
+  );
 
   it("does not trust a ZIP-family extension without ZIP magic", async () => {
     const directory = await createTestTempDirectory("rea-fake-archive-");
