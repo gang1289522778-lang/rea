@@ -278,6 +278,61 @@ describe("GraphQL operation recognition", () => {
     ]);
   });
 
+  it("keeps operations after unresolved interpolation prefixes unknown", () => {
+    expect(
+      rpcEndpoints(`
+        const GET_POST = gql\`
+          \${CORE_COMMENT_FIELDS}
+          query CommentsForPost($postId: ID!) { post(postId: $postId) { id } }
+        \`;
+        const ADD = gql\`\${A}\${B}
+          # fragments above
+          mutation AddComment($text: String!) { addComment(text: $text) { id } }
+        \`;
+        const NOT_FIRST = \`\${prefix} text query Hidden { users { id } }\`;
+      `),
+    ).toEqual([]);
+  });
+
+  it("does not claim text that an interpolation may leave inside a comment", () => {
+    expect(
+      rpcEndpoints(`
+        const COMMENTED = gql\`# \${EMPTY}query Hidden { f }
+          fragment F on T { f }\`;
+        const SAME_LINE = gql\`\${PREFIX}query AlsoHidden { f }\`;
+        const NEXT_LINE = gql\`# fragments \${F}
+          query Shown { f }\`;
+      `),
+    ).toEqual([]);
+  });
+
+  it("recognizes an operation after an exact ignored interpolation prefix", () => {
+    const source =
+      "const doc = gql`" +
+      "${" +
+      JSON.stringify("# prefix\n") +
+      "}" +
+      "query Known { f }`;";
+    expect(rpcEndpoints(source)).toEqual([
+      { kind: "network", value: "Known", mechanism: "graphql:query" },
+    ]);
+  });
+
+  it("keeps literal interpolation block strings within their GraphQL document", () => {
+    const prefix = 'fragment F on T { f(arg: """';
+    const suffix = '""") }';
+    const source =
+      "const doc = gql`" +
+      "${" +
+      JSON.stringify(prefix) +
+      "}" +
+      "\nquery Hidden { f }\n" +
+      "${" +
+      JSON.stringify(suffix) +
+      "}`;";
+    expect(rpcEndpoints(source)).toEqual([]);
+  });
+
   it("retains operations after long ignored prefixes and long headers", () => {
     const name = "Operation" + "x".repeat(512);
     const text =
@@ -352,4 +407,24 @@ it("keeps existing network endpoint recognition unchanged", () => {
       mechanism: "trpc:procedure:useQuery",
     },
   ]);
+});
+
+describe("GraphQL template reporting ownership", () => {
+  it.each([
+    '${"query Q { f }"}',
+    '${("query Q { f }" as const)}',
+    "${`query Q { f }`}",
+  ])("reports a folded operation once for %s", (interpolation) => {
+    expect(rpcEndpoints("const doc = gql`" + interpolation + "`;")).toEqual([
+      { kind: "network", value: "Q", mechanism: "graphql:query" },
+    ]);
+  });
+
+  it("retains child observations when the enclosing template has no operation", () => {
+    const source =
+      'const doc = gql`fragment F on T { f } ${"query Child { f }"}`;';
+    expect(rpcEndpoints(source)).toEqual([
+      { kind: "network", value: "Child", mechanism: "graphql:query" },
+    ]);
+  });
 });

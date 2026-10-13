@@ -270,8 +270,15 @@ RPC client syntax also contributes network endpoint candidates, in both
   named operation found at the start of a string or cooked template literal —
   the name must be followed by variable definitions (`($`), a directive, or a
   selection set starting with a field name — or in a precompiled
-  `OperationDefinition` document object. A graphql-tag `loc.source.body` copy is
-  not reported twice. Anonymous operations are not reported.
+  `OperationDefinition` document object. Exact literal interpolations are
+  folded into their template before inspecting its leading operation header;
+  their child literals are not reported again when that template supplies an
+  operation. An unresolved interpolation stops recovery at that boundary:
+  an already observed leading header survives an unknown suffix, but later
+  operations remain unknown. Fragment identifiers are not resolved or assumed
+  safe, since their values may change the GraphQL lexical context. A graphql-tag
+  `loc.source.body` copy is not reported twice. Anonymous operations are not
+  reported.
 
 A procedure path is the server-side procedure name, not a resolved URL; the
 transport URL depends on the link configuration and batching. When the proxy is
