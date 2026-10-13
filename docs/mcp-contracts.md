@@ -608,6 +608,15 @@ after SDK conversion and check advertised validation and actual calls.
 Individual model APIs can impose additional nesting limits; complete producer
 captures can exceed ten structural levels.
 
+### Compatible input spellings
+
+Named procedure and search contracts accept `address` for `procedure` and
+`query` for `pattern` when those names do not collide with another input.
+The accepted alternatives are advertised in the input JSON Schema and parsed
+by that same contract into canonical handler arguments and Evidence parameters.
+Sending both spellings is rejected, including in the compact profile. The MCP
+server does not rewrite raw caller arguments or hide accepted keys from hosts.
+
 ### Compact input schema profile
 
 Some function-calling providers reject a request while any single tool's

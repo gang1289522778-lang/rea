@@ -77,10 +77,8 @@ export class EvidenceMcpServer extends McpServer {
   }
 
   /**
-   * Compact the advertised input schema of every registered tool when the
-   * compact profile is active. The registered canonical schema, its parser,
-   * and output schemas are untouched; only the advertised JSON Schema
-   * projection is rendered within the provider's per-schema size budget.
+   * Compact the advertised named contract without changing accepted inputs.
+   * Compatibility spellings and canonical parsing belong to that contract.
    * The signatures mirror the SDK's registrations so call sites keep their
    * inferred handler argument types.
    */
@@ -103,9 +101,7 @@ export class EvidenceMcpServer extends McpServer {
   ): RegisteredTool {
     const budget = this.compactPresentation?.budgetBytes;
     const inputSchema =
-      budget !== undefined &&
-      config !== undefined &&
-      hasAdvertisedInputJsonSchema(config.inputSchema)
+      budget !== undefined && hasAdvertisedInputJsonSchema(config.inputSchema)
         ? transformAdvertisedInputJsonSchema(
             config.inputSchema as Parameters<
               typeof transformAdvertisedInputJsonSchema
@@ -113,10 +109,10 @@ export class EvidenceMcpServer extends McpServer {
             (projected) =>
               compactAdvertisedInputSchema(projected, budget).schema,
           )
-        : undefined;
+        : config.inputSchema;
     return super.registerTool(
       name,
-      (inputSchema === undefined
+      (inputSchema === config?.inputSchema
         ? config
         : { ...config, inputSchema }) as never,
       callback as never,
