@@ -626,7 +626,7 @@ nativeTest(
     const controller = new AbortController();
     let ownedRoot = "";
     let pid: number | undefined;
-    const provider = new SqliteDatabaseProvider({}, async (spawn) => {
+    const provider = new SqliteDatabaseProvider(process.env, async (spawn) => {
       ownedRoot = spawn.cwd ?? "";
       const requestPath = spawn.arguments[2];
       if (requestPath === undefined)
