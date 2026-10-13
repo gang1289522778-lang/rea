@@ -8,7 +8,12 @@ import { uniqueSorted } from "./canonicalOrdering.js";
 import { compareUnicodeCodePoints } from "./unicodeCodePointOrder.js";
 import { comparisonSourceEvidenceIds } from "./comparisonSourceEvidence.js";
 import { evidenceSchema, parseEvidence, type Evidence } from "./evidence.js";
-import { functionComparisonResultSchema } from "./functionComparisonSchemas.js";
+import {
+  functionComparisonResultSchema,
+  FUNCTION_DIMENSION_NAMES,
+  NORMALIZED_VIEW_DIMENSIONS,
+  isNormalizedViewDimension,
+} from "./functionComparisonSchemas.js";
 import {
   PROCESS_PROVIDER,
   isProcessEvidenceProvider,
@@ -23,14 +28,8 @@ import { prefixedDigestSchema } from "./../domain/digests.js";
 
 const evidenceIdSchema = prefixedDigestSchema("ev");
 const functionDimensionSchema = z.enum([
-  "identity",
-  "pseudocode",
-  "assembly",
-  "comments",
-  "calls",
-  "references",
-  "strings_names",
-  "cfg",
+  ...FUNCTION_DIMENSION_NAMES,
+  ...NORMALIZED_VIEW_DIMENSIONS,
 ]);
 const runtimeDimensionSchema = z.enum(PROCESS_COMPARISON_DIMENSIONS);
 const expectedPatternSchema = z.enum([
@@ -248,6 +247,8 @@ const correlate = (
       : pattern === mapping.hypothesis.expected_pattern
         ? "hypothesis"
         : "contradiction";
+  const { limitations: selectedStaticLimitations, ...staticSelection } =
+    selectedStatic;
   const projection = {
     static: mapping.static,
     runtime: mapping.runtime,
@@ -256,7 +257,7 @@ const correlate = (
   } satisfies JsonValue;
   return correlationItemSchema.parse({
     correlation_id: `cor_${sha256(canonicalJson(projection))}`,
-    static: { ...mapping.static, ...selectedStatic },
+    static: { ...mapping.static, ...staticSelection },
     runtime: { ...mapping.runtime, status: runtimeStatus },
     side_alignment: mapping.side_alignment,
     hypothesis: mapping.hypothesis,
@@ -270,6 +271,7 @@ const correlate = (
     ]),
     limitations: uniqueSorted([
       ...staticEvidence.limitations,
+      ...selectedStaticLimitations,
       ...runtimeEvidence.limitations,
       ...process.limitations,
       "This correlation tests an explicit hypothesis and does not establish causality.",
@@ -281,7 +283,9 @@ const correlate = (
 const selectStatic = (
   evidence: Evidence,
   selector: z.infer<typeof staticSelectorSchema>,
-): Pick<CorrelationItem["static"], "status" | "conclusion_kind"> => {
+): Pick<CorrelationItem["static"], "status" | "conclusion_kind"> & {
+  readonly limitations: readonly string[];
+} => {
   if (selector.kind === "function") {
     if (evidence.operation !== "compare_functions")
       throw new TypeError(
@@ -290,15 +294,25 @@ const selectStatic = (
     const result = functionComparisonResultSchema.parse(
       evidence.normalized_result,
     );
-    const matches = result.dimensions.filter(
-      ({ dimension }) => dimension === selector.dimension,
-    );
+    const normalized = isNormalizedViewDimension(selector.dimension);
+    const matches = normalized
+      ? (result.normalized_views?.views ?? []).filter(
+          ({ dimension }) => dimension === selector.dimension,
+        )
+      : result.dimensions.filter(
+          ({ dimension }) => dimension === selector.dimension,
+        );
     const match = matches.at(0);
     if (matches.length !== 1 || match === undefined)
-      throw new TypeError("Function selector must resolve exactly once");
+      throw new TypeError(
+        normalized
+          ? "Function selector requires the requested normalized view"
+          : "Function selector must resolve exactly once",
+      );
     return {
       status: match.status,
       conclusion_kind: match.conclusion_kind,
+      limitations: match.limitations,
     };
   }
   if (evidence.operation !== "compare_artifacts")
@@ -325,6 +339,7 @@ const selectStatic = (
         : status === "unknown"
           ? "unresolved_branch"
           : "derived_relationship",
+    limitations: [],
   };
 };
 
@@ -350,10 +365,12 @@ const parseStatic = (input: unknown): Evidence => {
     const result = functionComparisonResultSchema.parse(
       evidence.normalized_result,
     );
-    assertNestedLinks(
-      evidence,
-      result.dimensions.flatMap(({ evidence_links: links }) => links),
-    );
+    assertNestedLinks(evidence, [
+      ...result.dimensions.flatMap(({ evidence_links: links }) => links),
+      ...(result.normalized_views?.views.flatMap(
+        ({ evidence_links: links }) => links,
+      ) ?? []),
+    ]);
   }
   return evidence;
 };

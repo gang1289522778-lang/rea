@@ -3,8 +3,10 @@ import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { describe, expect, it } from "vitest";
 
 import { createTestBinarySession } from "../../fixtures/binarySession.js";
+import { toolContract } from "../../../src/contracts/toolContracts.js";
 import { FUNCTION_COMPARISON_EXAMPLE } from "../../../src/contracts/functionComparisonExample.js";
 import { createEvidence, parseEvidence } from "../../../src/domain/evidence.js";
+import { jsonValueSchema } from "../../../src/domain/jsonValue.js";
 import { createServer } from "../../../src/server/createServer.js";
 import { observed } from "../../fixtures/analysisExecution.js";
 
@@ -271,3 +273,125 @@ describe("function comparison MCP integration", () => {
     }
   });
 });
+
+describe("opt-in function comparison normalized views", () => {
+  const relocationPair = () => {
+    const left = FUNCTION_COMPARISON_EXAMPLE.left;
+    const captured = left.normalized_result as {
+      procedure: Record<string, unknown>;
+    } & Record<string, unknown>;
+    return [
+      left,
+      createEvidence(
+        {
+          path: "/tmp/function-relocated",
+          sha256: "3".repeat(64),
+          format: "mach-o",
+        },
+        left.provider,
+        {
+          operation: left.operation,
+          parameters: left.parameters,
+          result: jsonValueSchema.parse({
+            ...captured,
+            procedure: {
+              ...captured.procedure,
+              address: "0x2000",
+              name: "FUN_00401100",
+            },
+            basic_blocks: [{ start: "0x2000", end: "0x2001", successors: [] }],
+          }),
+          confidence: left.confidence,
+          authority: left.authority,
+        },
+      ),
+    ] as const;
+  };
+
+  it("keeps the exact contract when the caller does not opt in", async () => {
+    const [left, right] = relocationPair();
+    const harness = await connectComparisonMcp("function-comparison-exact");
+    try {
+      const response = await harness.mcp.callTool({
+        name: "compare_functions",
+        arguments: { left, right },
+      });
+      const evidence = parseEvidence(response.structuredContent);
+      expect(evidence.normalized_result).not.toHaveProperty("normalized_views");
+      expect(evidence.parameters).not.toHaveProperty(
+        "include_normalized_views",
+      );
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it("returns labelled views that cite both Evidence records when requested", async () => {
+    const [left, right] = relocationPair();
+    const harness = await connectComparisonMcp("function-comparison-views");
+    try {
+      const response = await harness.mcp.callTool({
+        name: "compare_functions",
+        arguments: { left, right, include_normalized_views: true },
+      });
+      expect(response.isError).not.toBe(true);
+      const exact = harness.mcp.callTool({
+        name: "compare_functions",
+        arguments: { left, right },
+      });
+      const evidence = parseEvidence(response.structuredContent);
+      const exactResult = toolContract("compare_functions").outputSchema.parse(
+        (await exact).structuredContent,
+      ).normalized_result;
+      expect(evidence.parameters).toMatchObject({
+        left_evidence_id: left.evidence_id,
+        right_evidence_id: right.evidence_id,
+        include_normalized_views: true,
+      });
+      expect(evidence.normalized_result).toMatchObject({
+        normalized_views: {
+          policy: "rea-address-normalized-text-v1",
+          views: [
+            {
+              dimension: "pseudocode_normalized",
+              evidence_links: [left.evidence_id, right.evidence_id],
+            },
+            {
+              dimension: "assembly_normalized",
+              evidence_links: [left.evidence_id, right.evidence_id],
+            },
+          ],
+        },
+      });
+      expect(
+        (evidence.normalized_result as { dimensions: unknown }).dimensions,
+      ).toEqual(exactResult.dimensions);
+    } finally {
+      await harness.close();
+    }
+  });
+});
+
+const connectComparisonMcp = async (name: string) => {
+  const session = createTestBinarySession(() => ({
+    health: () => Promise.resolve(),
+    execute: () => Promise.resolve(observed(null)),
+    close: () => Promise.resolve(resultOk(null)),
+  }));
+  const server = createServer({ kind: "session", session });
+  const client = new Client({ name, version: "1" });
+  const [clientTransport, serverTransport] =
+    InMemoryTransport.createLinkedPair();
+  await server.connect(serverTransport);
+  await client.connect(clientTransport);
+  return {
+    mcp: client,
+    close: async () => {
+      await Promise.allSettled([
+        client.close(),
+        server.close(),
+        session.close(),
+      ]);
+    },
+  };
+};

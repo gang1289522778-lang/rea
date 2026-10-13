@@ -7,7 +7,10 @@ import {
   compositeKey,
 } from "./unicodeCodePointOrder.js";
 import { prefixedDigestSchema } from "./../domain/digests.js";
-import { functionComparisonDimensionNameSchema } from "./functionComparisonSchemas.js";
+import {
+  functionComparisonDimensionNameSchema,
+  NORMALIZED_VIEW_DIMENSIONS,
+} from "./functionComparisonSchemas.js";
 
 const evidenceIdSchema = prefixedDigestSchema("ev");
 const unknownIdSchema = prefixedDigestSchema("unk");
@@ -48,7 +51,11 @@ const comparisonConclusionScopeSchema = z
     comparison_evidence_id: evidenceIdSchema,
     dimensions: z
       .array(
-        z.union([z.literal("overall"), functionComparisonDimensionNameSchema]),
+        z.union([
+          z.literal("overall"),
+          functionComparisonDimensionNameSchema,
+          z.enum(NORMALIZED_VIEW_DIMENSIONS),
+        ]),
       )
       .min(1),
   })

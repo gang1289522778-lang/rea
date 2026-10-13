@@ -264,6 +264,12 @@ const parseResult = (
       evidence,
       result.dimensions.flatMap(({ evidence_links: links }) => links),
     );
+    assertNestedLinks(
+      evidence,
+      (result.normalized_views?.views ?? []).flatMap(
+        ({ evidence_links: links }) => links,
+      ),
+    );
     return { operation, evidence, result };
   }
   const result = artifactComparisonResultSchema.parse(
@@ -334,7 +340,10 @@ const functionFindings = (
   >,
 ): Finding[] => {
   const { evidence, result } = comparison;
-  return result.dimensions.flatMap((dimension) =>
+  return [
+    ...result.dimensions,
+    ...(result.normalized_views?.views ?? []),
+  ].flatMap((dimension) =>
     dimension.status === "unchanged"
       ? []
       : [

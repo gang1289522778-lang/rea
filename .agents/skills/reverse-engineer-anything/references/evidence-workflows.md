@@ -37,7 +37,15 @@ or absence:
 - `compare_artifacts` compares inventory pages by occurrence path, content,
   metadata, and graph relations.
 - `compare_functions` compares explicit function Evidence, not fuzzy
-  whole-binary matches.
+  whole-binary matches. Its eight exact dimensions always keep their current
+  meaning; set `include_normalized_views` to also read separate
+  address-normalized pseudocode and assembly views when two builds only shift
+  addresses. Those views preserve exact function-relative instruction and branch
+  offsets, mask external numeric operands only when callee identity or
+  source-site and operand facts support the address use, and leave ambiguous
+  constants, literals, and comments visible. Their rules and limitations are
+  declared in the result; equal projected text does not prove stable target
+  identity or call order.
 - `compare_bundles` compares canonical bundle membership and unknown history.
 - `find_changed_behavior` combines existing comparisons; static differences
   remain candidates, not causal proof.

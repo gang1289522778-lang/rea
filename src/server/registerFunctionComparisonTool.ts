@@ -72,7 +72,10 @@ export const registerFunctionComparisonTool = (
           const computed = await runDerivedOperation(
             context,
             contract.name,
-            () => compareFunctions(leftEvidence, rightEvidence),
+            () =>
+              compareFunctions(leftEvidence, rightEvidence, {
+                includeNormalizedViews: input.include_normalized_views,
+              }),
           );
           if (!computed.ok)
             return server.delivery.toCallToolResult(computed, contract);
@@ -92,11 +95,17 @@ export const registerFunctionComparisonTool = (
               parameters: {
                 left_evidence_id: leftEvidence.evidence_id,
                 right_evidence_id: rightEvidence.evidence_id,
+                ...(comparison.normalized_views === undefined
+                  ? {}
+                  : { include_normalized_views: true }),
               },
               result: jsonValueSchema.parse(comparison),
               confidence: "derived",
               authority: "analyst-inference",
-              limitations: comparison.limitations,
+              limitations: [
+                ...comparison.limitations,
+                ...(comparison.normalized_views?.limitations ?? []),
+              ],
               evidenceLinks: [...leftIds, ...rightIds],
             },
           );

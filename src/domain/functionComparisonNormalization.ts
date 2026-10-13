@@ -262,7 +262,8 @@ export const sorted = (values: readonly unknown[]): readonly unknown[] =>
 export const isAutoName = (name: string): boolean =>
   /^(?:sub_[0-9a-f]+|fcn\.[0-9a-f]+|FUN_[0-9a-f]+)$/iu.test(name);
 
-const parseAddress = (value: string): bigint | null =>
+/** Parse one default-space provider address; other spaces keep their own spelling. */
+export const parseAddress = (value: string): bigint | null =>
   /^0x[0-9a-f]+$/iu.test(value) ? BigInt(value) : null;
 
 const relativeAddress = (value: string, base: string): string | null => {

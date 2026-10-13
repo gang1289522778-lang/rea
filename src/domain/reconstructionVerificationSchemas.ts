@@ -3,6 +3,10 @@ import { z } from "zod";
 import { IDENTIFIER_PATTERN } from "./stringPatterns.js";
 import { digestSchema } from "./../domain/digests.js";
 import { prefixedDigestSchema } from "./../domain/digests.js";
+import {
+  FUNCTION_DIMENSION_NAMES,
+  NORMALIZED_VIEW_DIMENSIONS,
+} from "./functionComparisonSchemas.js";
 import { PROCESS_COMPARISON_DIMENSIONS } from "./process/processComparison.js";
 
 const evidenceIdSchema = prefixedDigestSchema("ev");
@@ -26,14 +30,8 @@ const functionClaimSchema = z.object({
   kind: z.literal("structural-function"),
   dimension: z.enum([
     "overall",
-    "identity",
-    "pseudocode",
-    "assembly",
-    "comments",
-    "calls",
-    "references",
-    "strings_names",
-    "cfg",
+    ...FUNCTION_DIMENSION_NAMES,
+    ...NORMALIZED_VIEW_DIMENSIONS,
   ]),
 });
 const artifactClaimSchema = z.object({

@@ -19,6 +19,28 @@ const verifier = fileURLToPath(
   new URL("../../../scripts/verify-release-checkpoint.mjs", import.meta.url),
 );
 
+const releaseWorkflowJobSchema = z.union([
+  z.object({
+    steps: z.array(
+      z.object({
+        name: z.string().optional(),
+        run: z.string().optional(),
+      }),
+    ),
+  }),
+  z.object({ uses: z.string() }),
+]);
+
+const releaseWorkflowSchema = z.object({
+  jobs: z.record(z.string(), releaseWorkflowJobSchema),
+});
+
+it("accepts reusable workflow jobs without inline steps", () => {
+  expect(
+    releaseWorkflowJobSchema.parse({ uses: "./.github/workflows/ci.yml" }),
+  ).toEqual({ uses: "./.github/workflows/ci.yml" });
+});
+
 async function metadata(
   directory: string,
   version: string,
@@ -647,31 +669,23 @@ it.skipIf(process.platform === "win32").each([
   async ({ job, valid }) => {
     const f = await fixture();
     const sourceSha = await candidate(f, valid ? "6.0.0" : "5.1.0");
-    const workflow = z
-      .object({
-        jobs: z.object({
-          [job]: z.object({
-            steps: z.array(
-              z.object({
-                name: z.string().optional(),
-                run: z.string().optional(),
-              }),
-            ),
-          }),
-        }),
-      })
-      .parse(
-        parse(
-          await readFile(
-            new URL("../../../.github/workflows/release.yml", import.meta.url),
-            "utf8",
-          ),
+    const workflow = releaseWorkflowSchema.parse(
+      parse(
+        await readFile(
+          new URL("../../../.github/workflows/release.yml", import.meta.url),
+          "utf8",
         ),
-      );
+      ),
+    );
+    const selectedJob = workflow.jobs[job];
+    const steps =
+      selectedJob !== undefined && "steps" in selectedJob
+        ? selectedJob.steps
+        : [];
     const command = z
       .string()
       .parse(
-        workflow.jobs[job]?.steps.find(
+        steps.find(
           (step) =>
             step.name ===
             (job === "merged-release"

@@ -8,11 +8,18 @@ import {
 } from "./functionComparisonSchemas.js";
 import { overallStatus, summarize } from "./functionComparisonResults.js";
 import { compareDimensions } from "./functionComparisonDimensions.js";
+import { normalizedViews } from "./functionComparisonNormalizedViews.js";
+
+/** Caller-selected projection options for one explicit comparison. */
+export interface FunctionComparisonRequest {
+  readonly includeNormalizedViews?: boolean;
+}
 
 /** Compare two complete function Evidence records without fuzzy matching. */
 export const compareFunctions = (
   leftInput: unknown,
   rightInput: unknown,
+  request: FunctionComparisonRequest = {},
 ): FunctionComparisonResult => {
   const left = parseFunctionEvidence(leftInput);
   const right = parseFunctionEvidence(rightInput);
@@ -31,6 +38,17 @@ export const compareFunctions = (
     summary: summarize(dimensions),
     dimensions,
     changes,
+    ...(request.includeNormalizedViews === true
+      ? {
+          normalized_views: normalizedViews(left, right, {
+            links,
+            providersDiffer,
+            callsStatus:
+              dimensions.find(({ dimension }) => dimension === "calls")
+                ?.status ?? "unknown",
+          }),
+        }
+      : {}),
     limitations: [
       ...new Set([
         ...left.limitations.map((item) => `Left: ${item}`),
