@@ -16,11 +16,13 @@ import {
 } from "./providerStartupTimeout.js";
 import { mcpInputSchemaProfileSchema } from "./mcpInputSchemaProfile.js";
 import { mcpResponseBudgetSchema } from "./mcpResponseBudget.js";
+import { pwntoolsMaxInputBytesSchema } from "./pwntoolsMaxInputBytes.js";
 
 const environmentSchema = z.object({
   REA_ANALYSIS_PROVIDER: analysisProviderSelectorSchema.default("auto"),
   REA_MCP_MAX_RESPONSE_BYTES: mcpResponseBudgetSchema.optional(),
   REA_MCP_INPUT_SCHEMA_PROFILE: mcpInputSchemaProfileSchema.optional(),
+  REA_PWNTOOLS_MAX_INPUT_BYTES: pwntoolsMaxInputBytesSchema.optional(),
   REA_IDA_MCP_CONFIG: z
     .string()
     .min(1)

@@ -8,6 +8,9 @@ export REA_PWNTOOLS_PYTHON=/absolute/existing/venv/bin/python
 rea inspect-recorded-crash ./crash.core --json
 ```
 
+Optionally set `REA_PWNTOOLS_MAX_INPUT_BYTES` (e.g. `268435456` for 256 MiB)
+to analyze crash cores exceeding the default 32 MiB input budget.
+
 The selected Python needs unchanged pwntools 4.15.0, pyelftools 0.33 and Unicorn 2.1.2.
 REA does not install these dependencies. ELFFile/its original ELF structures and
 pwntools' original Linux amd64 ctypes provide parsing and ABI layout. The adapter
@@ -73,8 +76,10 @@ debugger context is `observed`.
 Initial Linux x64 limits: 32 MiB input, 64 MiB decoder reply, 1 MiB diagnostics per
 stage, 30 seconds owned wall deadline per stage, 3 GiB address-space soft ceiling
 and 30 seconds CPU soft ceiling. `REA_PWNTOOLS_MAX_INPUT_BYTES` raises the input
-bound alone, up to 1 GiB, and returns `provider_unavailable` when it is not a
-decimal integer in range; the reply, diagnostic and deadline bounds stay fixed, so a
+bound alone, up to one quarter of the worker address-space budget after reserving
+reply and diagnostic capacity. An unset or empty override retains the default;
+an invalid nonempty decimal override returns `provider_unavailable` at the provider
+boundary. The reply, diagnostic and deadline bounds stay fixed, so a
 large core that outruns them still fails explicitly instead of partially. Tighter
 inherited soft/hard limits are retained; hard limits are not raised. Complete
 oversized results fail explicitly. These process limits do not constitute a sandbox

@@ -17,6 +17,14 @@ REA_PWNTOOLS_PYTHON=/absolute/isolated-env/bin/python \
   rea inspect-binary-layout ./selected.elf --json
 ```
 
+Larger ELF artifacts exceeding the default 32 MiB input budget can be admitted by setting `REA_PWNTOOLS_MAX_INPUT_BYTES`.
+The override cannot exceed one quarter of the worker's 3 GiB address-space
+budget after reserving its 64 MiB reply and 1 MiB diagnostics; this reserves
+capacity for expanded input representations before either process reads the file.
+This is an admission bound, not a guarantee that every ELF fits the remaining
+worker memory. Actual pwntools decoding above the old 32 MiB limit has not been
+verified; recording-launcher tests cover REA's configured read/admission boundary.
+
 ```json
 {
   "name": "inspect_binary_layout",
@@ -99,7 +107,8 @@ CLI output are unchanged.
 
 Complete results have a 32 MiB input, 64 MiB reply, 1 MiB combined diagnostics
 and 30-second owned command deadline. `REA_PWNTOOLS_MAX_INPUT_BYTES` raises the
-input bound alone, up to 1 GiB; the reply and deadline bounds are unchanged. The
+input bound alone, up to the representation capacity described above; the reply
+and deadline bounds are unchanged. The
 reply budget applies to the decoder record; the CLI/MCP Evidence envelope adds
 copies and encoding overhead. The
 pinned MCP SDK defaults to a 10 MiB receive buffer. Large complete results need
