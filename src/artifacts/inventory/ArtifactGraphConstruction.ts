@@ -1,3 +1,4 @@
+import { isJavaScriptSourcePath } from "../../domain/javascript/javascriptArtifactFiles.js";
 import { compareUnicodeCodePoints } from "../../domain/unicodeCodePointOrder.js";
 import { digestCanonicalValue } from "../../domain/canonicalDigest.js";
 import { hasBinaryPlistSignature } from "../../domain/apple/appleArchiveFormat.js";
@@ -365,7 +366,7 @@ export const classifyArtifactPath = (
   const lower = path.toLowerCase();
   if (lower.endsWith(".map"))
     return { kind: "source-map", format: "source-map" };
-  if (/\.(?:m?js|cjs)$/u.test(lower))
+  if (isJavaScriptSourcePath(path))
     return { kind: "javascript", format: "javascript-bundle" };
   if (/\.framework(?:\/|$)/u.test(lower))
     return { kind: "framework", format: "file" };

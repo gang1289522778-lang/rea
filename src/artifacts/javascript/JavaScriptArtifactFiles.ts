@@ -1,3 +1,4 @@
+import { classifyJavaScriptArtifactFilePath } from "../../domain/javascript/javascriptArtifactFiles.js";
 import { createHash } from "node:crypto";
 import { isAbsolute } from "node:path";
 import type { Readable } from "node:stream";
@@ -393,7 +394,8 @@ const expectedInventory = (
     if (occurrence.artifact_id === null) {
       if (
         occurrence.entry_kind === "file" &&
-        relevantKind(occurrence.logical_path) !== undefined
+        classifyJavaScriptArtifactFilePath(occurrence.logical_path) !==
+          undefined
       )
         unavailableFiles.add(occurrence.logical_path);
       if (isNestedAsar)
@@ -425,7 +427,7 @@ const expectedInventory = (
           inventory_artifact_id: node.artifact_id,
         },
       });
-    const kind = relevantKind(occurrence.logical_path);
+    const kind = classifyJavaScriptArtifactFilePath(occurrence.logical_path);
     if (kind === undefined) continue;
     files.set(occurrence.logical_path, {
       path: occurrence.logical_path,
@@ -464,18 +466,6 @@ const assertExpectedFilesWereVisited = (
         "integrity",
         `Relevant artifact entry disappeared after inventory: ${path}`,
       );
-};
-
-const relevantKind = (path: string): JavaScriptArtifactFileKind | undefined => {
-  const lower = path.toLowerCase();
-  if (lower === "package.json" || lower.endsWith("/package.json"))
-    return "package-json";
-  if (lower.endsWith(".json")) return "json";
-  if (/\.(?:cjs|cts|mjs|mts|js|jsx|ts|tsx)$/u.test(lower)) return "javascript";
-  if (/\.html?$/u.test(lower)) return "html";
-  if (lower.endsWith(".map")) return "source-map";
-  if (lower.endsWith(".node")) return "native-addon";
-  return undefined;
 };
 
 const isFilesystemAsar = (entry: ArtifactEntry, path: string): boolean =>

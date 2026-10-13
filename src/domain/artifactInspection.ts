@@ -1,3 +1,4 @@
+import { classifyJavaScriptArtifactFilePath } from "./javascript/javascriptArtifactFiles.js";
 import { z } from "zod";
 
 import {
@@ -299,7 +300,46 @@ const probesFor = (
   inventory: ArtifactInventoryResult,
 ): ArtifactInspectionResult["next_probes"] => {
   const format = inventory.manifest.root_format;
-  if (["asar", "javascript-bundle", "directory"].includes(format))
+  return format === "directory"
+    ? directoryProbes(inventory)
+    : probesForFormat(format);
+};
+
+// An application bundle directory is only a container, so its probes follow
+// the formats it holds: a bundle of Mach-O executables is not a JavaScript tree.
+// Formats are ordered so a repeated operation keeps its most general rationale.
+const DIRECTORY_MEMBER_FORMATS: readonly ArtifactInventoryResult["manifest"]["root_format"][] =
+  ["asar", "mach-o-universal", "mach-o", "elf", "pe", "plist"];
+
+const directoryProbes = (
+  inventory: ArtifactInventoryResult,
+): ArtifactInspectionResult["next_probes"] => {
+  const present = new Set(
+    inventory.occurrences.map(({ artifact_format }) => artifact_format),
+  );
+  const hasJavaScriptMember = inventory.occurrences.some(
+    ({ entry_kind, logical_path }) =>
+      entry_kind === "file" &&
+      classifyJavaScriptArtifactFilePath(logical_path) !== undefined,
+  );
+  const members = DIRECTORY_MEMBER_FORMATS.filter((format) =>
+    present.has(format),
+  );
+  const probes = [
+    ...(hasJavaScriptMember ? probesForFormat("javascript-bundle") : []),
+    ...members.flatMap(probesForFormat),
+  ];
+  return probes.filter(
+    (probe, index) =>
+      probes.findIndex(({ operation }) => operation === probe.operation) ===
+      index,
+  );
+};
+
+const probesForFormat = (
+  format: ArtifactInventoryResult["manifest"]["root_format"],
+): ArtifactInspectionResult["next_probes"] => {
+  if (["asar", "javascript-bundle"].includes(format))
     return [
       {
         operation: "analyze_javascript_application",

@@ -45,3 +45,22 @@ export interface JavaScriptArtifactFileSet {
   readonly invalid_utf8_files: number;
   readonly source_selection?: JavaScriptSourceSelection;
 }
+
+/** Source suffixes admitted by the JavaScript artifact acquisition boundary. */
+export const isJavaScriptSourcePath = (path: string): boolean =>
+  /\.(?:cjs|cts|mjs|mts|js|jsx|ts|tsx)$/iu.test(path);
+
+/** Relevant path roles admitted by JavaScript artifact acquisition. */
+export const classifyJavaScriptArtifactFilePath = (
+  path: string,
+): JavaScriptArtifactFileKind | undefined => {
+  const lower = path.toLowerCase();
+  if (lower === "package.json" || lower.endsWith("/package.json"))
+    return "package-json";
+  if (lower.endsWith(".json")) return "json";
+  if (isJavaScriptSourcePath(path)) return "javascript";
+  if (/\.html?$/u.test(lower)) return "html";
+  if (lower.endsWith(".map")) return "source-map";
+  if (lower.endsWith(".node")) return "native-addon";
+  return undefined;
+};
