@@ -916,12 +916,23 @@ describe("native macOS provider failures and parsing", () => {
 
   it.each([
     {
-      ...machoTarget("/fixture.dll"),
+      path: "/fixture.dll",
+      sha256: "0".repeat(64),
+      kind: "executable" as const,
       format: "pe" as const,
+      architecture: "arm64" as const,
+      availableArchitectures: ["arm64"] as const,
       executableRole: "shared-library" as const,
       managed: false,
     },
-    { ...machoTarget("/fixture.elf"), format: "elf" as const },
+    {
+      path: "/fixture.elf",
+      sha256: "0".repeat(64),
+      kind: "executable" as const,
+      format: "elf" as const,
+      architecture: "arm64" as const,
+      availableArchitectures: ["arm64"] as const,
+    },
   ])(
     "refuses to list architectures of a $format target without running lipo",
     async (target) => {

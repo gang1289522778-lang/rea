@@ -9,7 +9,9 @@ Use [installation](installation.md#ghidra) for supported hosts, prerequisites,
 configuration, startup deadlines, resource controls, and cleanup recovery.
 [Windows P0](windows-ghidra-p0.md) has its own admission and lifecycle boundary;
 [NativeAOT observations](ghidra-nativeaot.md) include a built-in read-only PE
-snapshot parser and a separate optional annotation extension. Check the
+snapshot parser and a separate optional annotation extension. The
+[MIPS](ghidra-mips.md), [PSP/Allegrex](ghidra-psp.md) and
+[32-bit ARM](ghidra-arm.md) lanes pin their own import languages. Check the
 [release boundary](installation.md#released-package-and-main) when using npm.
 
 See [import language and analysis seeds](installation.md#ghidra-import-language-and-analysis-seeds)

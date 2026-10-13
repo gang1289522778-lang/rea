@@ -22,11 +22,13 @@ import {
   ghidraRiscvProfileParameters,
 } from "./GhidraRiscvProfile.js";
 import { ghidraRawBinaryLanguage } from "./GhidraRawBinaryLanguage.js";
+import { ghidraArmProfileParameters } from "./GhidraArmProfile.js";
 
 import {
   ghidraProcessorUnsupportedReason,
   isGhidraPspTarget,
 } from "./GhidraPspProfile.js";
+import { ghidraArmUnsupportedReason } from "./GhidraArmProfile.js";
 import { resolveGhidraPspExtension } from "./GhidraPspExtension.js";
 import {
   NATIVE_AOT_MAX_REPORT_BYTES,
@@ -72,6 +74,17 @@ export const resolveGhidraAnalysisProfile = async (
           "resolve_analysis_profile",
           target.path,
           mipsReason,
+        ),
+      ),
+    );
+  const armReason = ghidraArmUnsupportedReason(target);
+  if (armReason !== null)
+    return Promise.resolve(
+      err(
+        new AnalysisUnsupportedTargetError(
+          "resolve_analysis_profile",
+          target.path,
+          armReason,
         ),
       ),
     );
@@ -274,6 +287,7 @@ export const resolveGhidraAnalysisProfile = async (
           : {}),
         ...analyzerParameters,
         ...ghidraMipsProfileParameters(target),
+        ...ghidraArmProfileParameters(target, languageOverride),
         ...ghidraRiscvProfileParameters(target),
         ...(pspExtension?.ok === true
           ? {

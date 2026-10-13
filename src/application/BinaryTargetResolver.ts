@@ -18,6 +18,7 @@ import { AnalysisCancelledError } from "../domain/analysisErrorCore.js";
 import type { BinaryTarget } from "../domain/binaryTargetTypes.js";
 import { err, ok, type Result } from "../domain/result.js";
 import { readMipsElfMetadata } from "./MipsElfMetadata.js";
+import { readArmElfCpuArch } from "./ArmElfAttributes.js";
 import {
   resolveAppBundleExecutable,
   type ResolvedAppBundle,
@@ -486,31 +487,54 @@ const readExecutableMetadata = async (
     }
   }
   const parsed = parseExecutableHeader(bytes, hostArchitecture, fileSize);
-  if (
-    !parsed.ok ||
-    parsed.value.architecture !== "mips" ||
-    parsed.value.mips.elfClass !== 32
-  )
-    return parsed;
-  const declarations = await readMipsElfMetadata(
-    handle,
-    parsed.value.mips,
-    () => throwIfTargetResolutionCancelled(signal),
-  );
-  if (!declarations.ok) return declarations;
-  return ok({
-    ...parsed.value,
-    mips: {
-      ...parsed.value.mips,
-      abiFlags: declarations.value.abiFlags,
-      ...(declarations.value.sharedLoad === undefined
-        ? {}
-        : { sharedLoad: declarations.value.sharedLoad }),
-      ...(declarations.value.limitations.length === 0
-        ? {}
-        : { limitations: declarations.value.limitations }),
-    },
-  });
+  if (!parsed.ok) return parsed;
+  if (parsed.value.architecture === "mips") {
+    if (parsed.value.mips.elfClass !== 32) return parsed;
+    const declarations = await readMipsElfMetadata(
+      handle,
+      parsed.value.mips,
+      () => throwIfTargetResolutionCancelled(signal),
+    );
+    if (!declarations.ok) return declarations;
+    return ok({
+      ...parsed.value,
+      mips: {
+        ...parsed.value.mips,
+        abiFlags: declarations.value.abiFlags,
+        ...(declarations.value.sharedLoad === undefined
+          ? {}
+          : { sharedLoad: declarations.value.sharedLoad }),
+        ...(declarations.value.limitations.length === 0
+          ? {}
+          : { limitations: declarations.value.limitations }),
+      },
+    });
+  }
+  if (parsed.value.format === "elf" && parsed.value.architecture === "arm") {
+    // Only the little-endian ELF32 shape has a verified consumer; big-endian
+    // declarations stay uninspected and their lanes refuse on byte order.
+    if (
+      parsed.value.arm.elfClass !== 32 ||
+      parsed.value.arm.byteOrder !== "little"
+    )
+      return parsed;
+    const attributes = await readArmElfCpuArch(handle, parsed.value.arm, () =>
+      throwIfTargetResolutionCancelled(signal),
+    );
+    if (!attributes.ok) return attributes;
+    return ok({
+      ...parsed.value,
+      arm: {
+        ...parsed.value.arm,
+        cpuArch: attributes.value.cpuArch,
+        cpuArchProfile: attributes.value.cpuArchProfile,
+        ...(attributes.value.limitations.length === 0
+          ? {}
+          : { limitations: attributes.value.limitations }),
+      },
+    });
+  }
+  return parsed;
 };
 
 const readPeMetadata = async (

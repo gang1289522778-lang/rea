@@ -1,4 +1,5 @@
 import type {
+  ArmElfMetadata,
   BinaryArchitecture,
   ElfFamilyMetadata,
   HeaderArchitecture,
@@ -25,12 +26,18 @@ export type ExecutableMetadata =
     }
   | {
       readonly format: "elf";
+      readonly architecture: "arm";
+      readonly availableArchitectures: readonly "arm"[];
+      readonly arm: ArmElfMetadata;
+    }
+  | {
+      readonly format: "elf";
       readonly architecture: "riscv";
       readonly availableArchitectures: readonly "riscv"[];
       readonly riscv: RiscvElfMetadata;
     }
   | {
-      readonly format: "mach-o" | "elf" | "dos-mz" | "dos-com";
+      readonly format: "mach-o" | "dos-mz" | "dos-com";
       readonly architecture: HeaderArchitecture;
       readonly availableArchitectures: readonly HeaderArchitecture[];
       readonly universalSlice?: never;
@@ -40,6 +47,14 @@ export type ExecutableMetadata =
       readonly architecture: HeaderArchitecture;
       readonly availableArchitectures: readonly HeaderArchitecture[];
       readonly universalSlice: UniversalMachOSlice;
+    }
+  | {
+      readonly format: "elf";
+      readonly architecture: Exclude<HeaderArchitecture, "arm">;
+      readonly availableArchitectures: readonly Exclude<
+        HeaderArchitecture,
+        "arm"
+      >[];
     }
   | {
       readonly format: "pe";
@@ -199,7 +214,11 @@ const parseElf = (
   const machine = little ? bytes.readUInt16LE(18) : bytes.readUInt16BE(18);
   const architecture = elfArchitecture(machine);
   if (architecture === undefined) return err("unsupported ELF architecture");
-  if (architecture === "mips" || architecture === "riscv") {
+  if (
+    architecture === "mips" ||
+    architecture === "riscv" ||
+    architecture === "arm"
+  ) {
     const flagsOffset = elfClass === 32 ? 36 : 48;
     const metadata: ElfFamilyMetadata = {
       elfClass,
@@ -216,12 +235,19 @@ const parseElf = (
           availableArchitectures: [architecture],
           mips: metadata,
         })
-      : ok({
-          format: "elf",
-          architecture,
-          availableArchitectures: [architecture],
-          riscv: metadata,
-        });
+      : architecture === "riscv"
+        ? ok({
+            format: "elf",
+            architecture,
+            availableArchitectures: [architecture],
+            riscv: metadata,
+          })
+        : ok({
+            format: "elf",
+            architecture,
+            availableArchitectures: [architecture],
+            arm: metadata,
+          });
   }
   return ok({
     format: "elf",
