@@ -8,7 +8,7 @@ selected page's current origin. Electron discovery lists eligible local
 `file://` targets without a configured file-root allowlist.
 
 Start browser work with `list_browser_targets`; start Electron runtime work with
-`list_electron_targets`. Inspect the target selected for the user's task. Observation
+`list_electron_targets`. Before an electron-main Inspector attempt, check packaged fuses with `inspect_electron_fuses`. Inspect the target selected for the user's task. Observation
 is passive: never claim REA clicked, navigated, evaluated page JavaScript,
 invoked IPC, captured prior activity, or contained the page's network.
 

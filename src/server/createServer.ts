@@ -21,6 +21,8 @@ import { registerRecordedCrashTools } from "./registerRecordedCrashTools.js";
 import { createRecordedCrashService } from "../composition/binaryDiagnostics.js";
 import { createGoBinaryService } from "../composition/go.js";
 import type { GoBinaryService } from "../application/go/GoBinaryService.js";
+import { createElectronFuseService } from "../composition/electronFuses.js";
+import type { ElectronFuseService } from "../application/electron/ElectronFuseService.js";
 import { registerGoTools } from "./registerGoTools.js";
 import type { RecordedCrashService } from "../application/binaryDiagnostics/RecordedCrashService.js";
 import { registerAnalysisViewTool } from "./registerAnalysisViewTool.js";
@@ -141,6 +143,7 @@ export interface CreateServerOptions {
   readonly logger?: Logger;
   readonly binaryLayout?: BinaryLayoutService;
   readonly goBinary?: GoBinaryService;
+  readonly electronFuses?: ElectronFuseService;
   readonly recordedCrash?: RecordedCrashService;
   readonly firmwareAnalysis?: FirmwareAnalysisPort;
   readonly javascriptRecovery?: JavaScriptRecoveryPort;
@@ -782,6 +785,7 @@ const registerObservationTools = ({
     evidenceById,
     electron: options.electronObservation,
     electronActive: options.electronActiveObservation,
+    electronFuses: options.electronFuses ?? createElectronFuseService(),
     observationLoadFailure:
       options.optionalProviderLoadFailures?.electronObservation,
     activeLoadFailure:

@@ -161,6 +161,7 @@ export const providerCatalog = (sources) => {
     reconciliationContracts,
     observationContracts,
     activeContracts,
+    fuseContracts,
   } = electronContractSlices(sources);
   return [
     {
@@ -222,6 +223,10 @@ export const providerCatalog = (sources) => {
     {
       identity: sources.goProvider.GO_BINARY_PROVIDER_IDENTITY,
       contracts: sources.goContracts.GO_TOOL_CONTRACTS,
+    },
+    {
+      identity: sources.electronFuseProvider.ELECTRON_FUSE_PROVIDER_IDENTITY,
+      contracts: fuseContracts,
     },
     {
       identity: sources.sqliteDomain.SQLITE_PROVIDER_IDENTITY,
@@ -387,17 +392,23 @@ const electronContractSlices = (sources) => {
       ({ name }) =>
         name !== "analyze_javascript_application" &&
         name !== "reconcile_javascript_runtime" &&
-        name !== "capture_electron_scenario",
+        name !== "capture_electron_scenario" &&
+        name !== "inspect_electron_fuses",
     );
   const activeContracts =
     sources.electronContracts.ELECTRON_TOOL_CONTRACTS.filter(
       ({ name }) => name === "capture_electron_scenario",
     );
+  const fuseContracts =
+    sources.electronContracts.ELECTRON_TOOL_CONTRACTS.filter(
+      ({ name }) => name === "inspect_electron_fuses",
+    );
   if (
     applicationContracts.length !== 1 ||
     reconciliationContracts.length !== 1 ||
     observationContracts.length !== 2 ||
-    activeContracts.length !== 1
+    activeContracts.length !== 1 ||
+    fuseContracts.length !== 1
   )
     throw new Error("Electron provider capability ownership drifted");
   return {
@@ -405,5 +416,6 @@ const electronContractSlices = (sources) => {
     reconciliationContracts,
     observationContracts,
     activeContracts,
+    fuseContracts,
   };
 };
