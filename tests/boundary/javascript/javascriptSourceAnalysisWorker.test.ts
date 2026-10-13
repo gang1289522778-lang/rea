@@ -7,6 +7,7 @@ import { projectAnalysisError } from "../../../src/domain/analysisErrorProjectio
 import { spawnOwnedProviderProcess } from "../../../src/process/ProviderProcess.js";
 import { javaScriptWorkerMemoryLimitBytes } from "../../../src/process/JavaScriptWorkerMemoryLimit.js";
 import type { JavaScriptArtifactFile } from "../../../src/domain/javascript/javascriptArtifactFiles.js";
+import { modeSourceFiles } from "../../fixtures/javascriptModuleResolutionModes.js";
 
 const source = (path: string, value: string): JavaScriptArtifactFile => ({
   path,
@@ -67,6 +68,88 @@ it("reuses one real owned analyzer while retaining distinct source identities an
         ),
       ).toBe(true);
     }
+    for (const path of [
+      "cts/inline.cts",
+      "cts/same.cts",
+      "cts/unresolved.cts",
+      "cts/recovered.cts",
+    ] as const) {
+      const result = await worker.analyze(
+        source(path, modeSourceFiles[path]),
+        100,
+      );
+      if (!result.ok) throw result.error.error;
+      const links = result.value.module?.moduleLinks;
+      expect(result.value.javascript.references).toEqual([]);
+      expect(links?.every(({ kind }) => kind === "type-import")).toBe(true);
+      if (path === "cts/inline.cts")
+        expect(links).toMatchObject([
+          {
+            importedName: "ImportOnly",
+            resolutionMode: "import",
+            location: { start: { line: 1 } },
+          },
+          {
+            importedName: "RequireOnly",
+            resolutionMode: "require",
+            location: { start: { line: 2 } },
+          },
+          {
+            importedName: "Shapes.ImportOnly",
+            resolutionMode: "import",
+            location: { start: { line: 3 } },
+          },
+          { importedName: "Types.ImportOnly", specifier: "./reexport.cjs" },
+        ]);
+      else if (path === "cts/recovered.cts") {
+        expect(result.value.javascript.parse_status).toBe("partial");
+        expect(links).toMatchObject([
+          {
+            importedName: "ImportOnly",
+            resolutionMode: "import",
+            location: { start: { line: 1 } },
+          },
+        ]);
+      } else
+        expect(links).toMatchObject([
+          { localName: "First", resolutionMode: "import" },
+          { localName: "Second", resolutionMode: "require" },
+        ]);
+    }
+    for (const path of ["cts/native.mts", "cts/native-mixed.mts"] as const) {
+      const result = await worker.analyze(
+        source(path, modeSourceFiles[path]),
+        100,
+      );
+      if (!result.ok) throw result.error.error;
+      const bindings = result.value.javascript.electron.native_addon_bindings;
+      if (path === "cts/native.mts") {
+        expect(bindings).toHaveLength(8);
+        expect(bindings.every(({ type_only }) => type_only === true)).toBe(
+          true,
+        );
+      } else {
+        expect(bindings).toHaveLength(4);
+        expect(
+          bindings.filter(({ type_only }) => type_only === true),
+        ).toHaveLength(2);
+        expect(
+          bindings.filter(({ type_only }) => type_only === false),
+        ).toHaveLength(2);
+      }
+    }
+    const uncertain = await worker.analyze(
+      source("cts/native-default.ts", modeSourceFiles["cts/native-default.ts"]),
+      100,
+    );
+    if (!uncertain.ok) throw uncertain.error.error;
+    expect(
+      uncertain.value.javascript.electron.native_addon_bindings,
+    ).toMatchObject([{ module_kind: "compiler-dependent", type_only: true }]);
+    expect(uncertain.value.module?.moduleLinks).toMatchObject([
+      { resolutionMode: "compiler-dependent" },
+    ]);
+    await expectNativeTypeSelections(worker);
     expect(launches).toHaveLength(1);
   } finally {
     await worker.close();
@@ -278,3 +361,185 @@ require("node:readline").createInterface({ input: process.stdin }).once("line", 
     }
   },
 );
+
+const expectNativeTypeSelections = async (
+  worker: JavaScriptAnalysisWorker,
+): Promise<void> => {
+  const importEquals = await worker.analyze(
+    source(
+      "cts/native-import-equals.cts",
+      modeSourceFiles["cts/native-import-equals.cts"],
+    ),
+    100,
+  );
+  if (!importEquals.ok) throw importEquals.error.error;
+  expect(
+    importEquals.value.javascript.electron.native_addon_bindings,
+  ).toMatchObject([
+    { module_kind: "require", type_only: true, namespace_access: true },
+  ]);
+  const esmEquals = await worker.analyze(
+    source(
+      "cts/native-import-equals.mts",
+      modeSourceFiles["cts/native-import-equals.mts"],
+    ),
+    100,
+  );
+  if (!esmEquals.ok) throw esmEquals.error.error;
+  expect(esmEquals.value.module?.moduleLinks).toMatchObject([
+    { resolutionMode: "require", kind: "type-import" },
+  ]);
+  const indexed = await worker.analyze(
+    source("cts/native-indexed.mts", modeSourceFiles["cts/native-indexed.mts"]),
+    100,
+  );
+  if (!indexed.ok) throw indexed.error.error;
+  expect(
+    indexed.value.javascript.electron.native_addon_bindings.map(
+      ({ members, namespace_access, dynamic_member_access, type_only }) => [
+        members,
+        namespace_access,
+        dynamic_member_access,
+        type_only,
+      ],
+    ),
+  ).toEqual([
+    [["NativeMode"], false, false, true],
+    [["Native.Mode"], false, false, true],
+    [[""], false, false, true],
+    [["NativeMode"], false, false, true],
+    [["Native.Mode"], false, false, true],
+    [[""], false, false, true],
+    [[], false, true, true],
+    [["NativeMode"], false, false, true],
+    [["-1"], false, false, true],
+    [["0"], false, false, true],
+    [["-1"], false, false, true],
+    [["-1", "NativeMode"], false, false, true],
+  ]);
+  expect(
+    indexed.value.module?.moduleLinks.map(({ importedName }) => importedName),
+  ).toEqual([
+    "NativeMode",
+    "Native.Mode",
+    "",
+    "NativeMode",
+    "Native.Mode",
+    "",
+    null,
+    "NativeMode",
+    "-1",
+    "0",
+    "-1",
+    "(NativeMode | -1)",
+  ]);
+  for (const [text, count] of [
+    [
+      'import type { NativeMode } from "native-mode/addon.node" with { "resolution-mode": "import", type: "json" };',
+      1,
+    ],
+    [
+      'import type { NativeMode } from "native-mode/addon.node" with { "resolution-mode": "import", "resolution-mode": "require" };',
+      1,
+    ],
+    [
+      'type Native = import("native-mode/addon.node", {with: {"resolution-mode": "import", type: "json"}}).NativeMode;',
+      1,
+    ],
+    [modeSourceFiles["cts/native-empty-attributes.cts"], 1],
+    [modeSourceFiles["cts/native-empty-reexport.cts"], 1],
+    [modeSourceFiles["cts/native-empty-namespace.cts"], 1],
+    [modeSourceFiles["cts/native-empty-commented.cts"], 1],
+    [modeSourceFiles["cts/native-nested-empty.d.cts"], 3],
+    [modeSourceFiles["cts/native-value-selector.mts"], 1],
+    [modeSourceFiles["cts/native-value-export-selector.mts"], 1],
+  ] as const) {
+    const result = await worker.analyze(source("invalid.cts", text), 100);
+    if (!result.ok) throw result.error.error;
+    if (
+      text === modeSourceFiles["cts/native-value-selector.mts"] ||
+      text === modeSourceFiles["cts/native-value-export-selector.mts"]
+    )
+      expect(result.value.javascript.references).toMatchObject([
+        { resolutionMode: "compiler-dependent" },
+      ]);
+    expect(
+      result.value.javascript.electron.native_addon_bindings.map(
+        ({ module_kind }) => module_kind,
+      ),
+    ).toEqual(Array.from({ length: count }, () => "compiler-dependent"));
+  }
+  const omitted = await worker.analyze(
+    source("omitted.cts", modeSourceFiles["cts/native-commented-omission.cts"]),
+    100,
+  );
+  if (!omitted.ok) throw omitted.error.error;
+  expect(omitted.value.module?.moduleLinks).toMatchObject([
+    { resolutionMode: "require", importedName: "NativeMode" },
+  ]);
+  const nested = await worker.analyze(
+    source("nested.d.cts", modeSourceFiles["cts/native-nested.d.cts"]),
+    100,
+  );
+  if (!nested.ok) throw nested.error.error;
+  expect(
+    nested.value.module?.moduleLinks.map(
+      ({ resolutionMode }) => resolutionMode,
+    ),
+  ).toEqual(["require", "require", "require"]);
+  await expectNativeTypeIndexAlternatives(worker);
+};
+
+const expectNativeTypeIndexAlternatives = async (
+  worker: JavaScriptAnalysisWorker,
+): Promise<void> => {
+  const dynamic = await worker.analyze(
+    source(
+      "dynamic.mts",
+      'type Native = (typeof import("native-mode/addon.node"))[`Native${string}`];',
+    ),
+    100,
+  );
+  if (!dynamic.ok) throw dynamic.error.error;
+  expect(dynamic.value.javascript.electron.native_addon_bindings).toMatchObject(
+    [{ members: [], dynamic_member_access: true }],
+  );
+  const segments = await worker.analyze(
+    source(
+      "segments.mts",
+      [
+        'type Nested = import("native-mode/addon.node").A.B;',
+        'type Literal = (typeof import("native-mode/addon.node"))["A.B"];',
+        'type Union = (typeof import("native-mode/addon.node"))["A" | "B"]["C" | "D"];',
+        'type Partial = (typeof import("native-mode/addon.node"))["A" | string];',
+      ].join("\n"),
+    ),
+    100,
+  );
+  if (!segments.ok) throw segments.error.error;
+  expect(
+    segments.value.javascript.electron.native_addon_bindings,
+  ).toMatchObject([
+    { members: ["A"], dynamic_member_access: false },
+    { members: ["A.B"], dynamic_member_access: false },
+    { members: ["A", "B"], dynamic_member_access: false },
+    { members: ["A"], dynamic_member_access: true },
+  ]);
+  expect(segments.value.module?.moduleLinks).toMatchObject([
+    { importedName: "A.B", importedSelection: [["A"], ["B"]] },
+    { importedName: "A.B", importedSelection: [["A.B"]] },
+    {
+      importedName: "(A | B).(C | D)",
+      importedSelection: [
+        ["A", "B"],
+        ["C", "D"],
+      ],
+      dynamicMemberAccess: false,
+    },
+    {
+      importedName: "A",
+      importedSelection: [["A"]],
+      dynamicMemberAccess: true,
+    },
+  ]);
+};

@@ -21,10 +21,7 @@ import {
   staticInferenceEvidence,
   unavailableAstEvidence,
 } from "./JavaScriptArtifactGraphEvidence.js";
-import {
-  resolveArtifactPathByContext,
-  type ArtifactPathResolution,
-} from "./JavaScriptArtifactPathResolution.js";
+import type { ArtifactPathResolution } from "./JavaScriptArtifactPathResolution.js";
 
 /** Mutable graph-construction state scoped to one reconstruction. */
 export interface JavaScriptArtifactGraphContext {
@@ -345,21 +342,6 @@ export const chunkLookupKey = (
   runtime: string,
   chunkKey: string,
 ): string => compositeKey([path, runtime, chunkKey]);
-
-/** Resolve a relative static specifier without escaping the artifact root. */
-export const resolveArtifactPath = (
-  specifier: string,
-  sourcePath: string,
-  files: ReadonlyMap<string, JavaScriptArtifactFile>,
-  moduleKind?: "import" | "require" | "compiler-dependent",
-): string | null =>
-  resolveArtifactPathByContext({
-    declaredPath: specifier,
-    sourcePath,
-    context: "module-specifier",
-    files,
-    ...(moduleKind === undefined ? {} : { moduleKind }),
-  }).resolved_path;
 
 /** Locate the recovered module that owns a static finding. */
 export const sourceNodeFor = (

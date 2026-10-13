@@ -391,6 +391,9 @@ export const addReference = (
     node: input.node,
     value: {
       kind: input.kind,
+      ...(input.resolutionMode === undefined
+        ? {}
+        : { resolutionMode: input.resolutionMode }),
       ...reference,
       module_key: null,
       location: range(input.node),

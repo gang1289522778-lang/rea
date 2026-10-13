@@ -25,6 +25,32 @@ describe("Electron option evidence", () => {
     });
   });
 
+  it("retains negative zero as an expression through JSON serialization", () => {
+    const analysis = analyzeJavaScriptStaticSource(`
+      const { BrowserWindow } = require("electron");
+      new BrowserWindow({ webPreferences: { zoomFactor: -0 } });
+    `);
+    expect(JSON.parse(JSON.stringify(analysis))).toMatchObject({
+      parse_status: "partial",
+      electron: {
+        browser_windows: [
+          {
+            web_preferences: [
+              {
+                name: "zoomFactor",
+                value: {
+                  status: "dynamic",
+                  value: null,
+                  expression: "-0",
+                },
+              },
+            ],
+          },
+        ],
+      },
+    });
+  });
+
   it("does not read an audio or video preload attribute as a preload script", () => {
     const analysis = analyzeJavaScriptStaticSource(`
       jsx("audio", { controls: true, preload: "metadata", src });

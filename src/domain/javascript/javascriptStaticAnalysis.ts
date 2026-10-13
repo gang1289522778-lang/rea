@@ -1,4 +1,6 @@
+import type { JavaScriptModuleResolutionMode } from "./javascriptModuleResolutionMode.js";
 import * as t from "@babel/types";
+import { typescriptImportResolutionMode } from "./typescriptImportResolutionMode.js";
 import { collectElectronWrappedCallPaths } from "./electronWrappedCallPaths.js";
 import {
   ELECTRON_IDENTITY_LIMITATION,
@@ -78,9 +80,15 @@ export const analyzeParsedJavaScriptStaticSource = (
   source: string,
   file: ParsedJavaScriptSource,
   openReceiverFacts?: ReadonlyMap<number, JavaScriptOpenReceiverFact>,
+  staticImportResolutionMode: JavaScriptModuleResolutionMode = "import",
 ): JavaScriptStaticAnalysis =>
   completeSemanticSteps(
-    analyzeParsedJavaScriptStaticSourceSteps(source, file, openReceiverFacts),
+    analyzeParsedJavaScriptStaticSourceSteps(
+      source,
+      file,
+      openReceiverFacts,
+      staticImportResolutionMode,
+    ),
   );
 
 /** Static analysis that yields during its source traversal; results are unchanged. */
@@ -88,6 +96,7 @@ export function* analyzeParsedJavaScriptStaticSourceSteps(
   source: string,
   file: ParsedJavaScriptSource,
   openReceiverFacts?: ReadonlyMap<number, JavaScriptOpenReceiverFact>,
+  staticImportResolutionMode: JavaScriptModuleResolutionMode = "import",
 ): Generator<void, JavaScriptStaticAnalysis> {
   const accumulator = createJavaScriptAnalysisAccumulator(source.length);
   const bindings = yield* indexJavaScriptBindingsSteps(file.program);
@@ -101,6 +110,8 @@ export function* analyzeParsedJavaScriptStaticSourceSteps(
     {
       source,
       accumulator,
+      staticImportResolutionMode,
+      parentsByNode: bindings.parentsByNode,
       ...(openReceiverFacts === undefined ? {} : { openReceiverFacts }),
       electronBindings: electronIdentity.bindings,
       rpcScan: createJavaScriptRpcScan(source, clientRoots),
@@ -240,7 +251,12 @@ const inspectNode = (
   bindings: JavaScriptSemanticAnalysisState,
 ): void => {
   const { source, accumulator } = findings;
-  inspectElectronStaticNode(node, findings);
+  const resolutionMode = typescriptImportResolutionMode(node);
+  inspectElectronStaticNode(
+    node,
+    findings,
+    resolutionMode ?? findings.staticImportResolutionMode,
+  );
   if (t.isCallExpression(node)) {
     inspectBundlerBootstrap(source, node, accumulator, bindings);
     inspectBundlerRegistration(source, node, accumulator, bindings);
@@ -259,23 +275,25 @@ const inspectNode = (
     node.source !== undefined &&
     !(t.isImportDeclaration(node) && isTypeOnlyImportDeclaration(node)) &&
     !(t.isExportAllDeclaration(node) && isTypeOnlyExportDeclaration(node))
-  )
+  ) {
     addReference(findings, {
       node,
       kind: "static-import",
       specifier: node.source.value,
+      ...(resolutionMode === undefined ? {} : { resolutionMode }),
     });
-  else if (
+  } else if (
     t.isExportNamedDeclaration(node) &&
     node.source != null &&
     !isTypeOnlyExportDeclaration(node)
-  )
+  ) {
     addReference(findings, {
       node,
       kind: "static-import",
       specifier: node.source.value,
+      ...(resolutionMode === undefined ? {} : { resolutionMode }),
     });
-  else if (t.isImportExpression(node))
+  } else if (t.isImportExpression(node))
     addReference(findings, {
       node,
       kind: "dynamic-import",

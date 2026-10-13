@@ -197,7 +197,7 @@ const resolvePath = (input: ResolveArtifactPathInput): CandidateResolution => {
       imported.resolvedPath === required.resolvedPath &&
       imported.candidatePath === required.candidatePath;
     const limitation =
-      "Static TypeScript loader mode is compiler-dependent without retained compiler options. " +
+      "Static TypeScript loader mode is unknown (including invalid explicit selectors), or compiler-dependent without retained compiler options. " +
       (sameOutcome
         ? "Node import and require resolution agree on this outcome."
         : "Node import and require resolution disagree; neither branch is an established target.");

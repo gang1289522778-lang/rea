@@ -36,6 +36,12 @@ export const readExactJavaScriptLiteral = (
   if (t.isStringLiteral(node)) return { found: true, value: node.value };
   if (t.isNumericLiteral(node) && Number.isFinite(node.value))
     return { found: true, value: node.value };
+  if (
+    t.isUnaryExpression(node, { operator: "-" }) &&
+    t.isNumericLiteral(node.argument) &&
+    Number.isFinite(node.argument.value)
+  )
+    return { found: true, value: -node.argument.value };
   if (t.isBooleanLiteral(node)) return { found: true, value: node.value };
   if (t.isNullLiteral(node)) return { found: true, value: null };
   if (

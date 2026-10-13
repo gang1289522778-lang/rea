@@ -175,15 +175,7 @@ const literalValue = (
   | { readonly found: false } => {
   if (node === null || node === undefined) return { found: false };
   const literal = readExactJavaScriptLiteral(node);
-  if (literal.found) return literal;
-  if (
-    t.isUnaryExpression(node, { operator: "-" }) &&
-    t.isNumericLiteral(node.argument)
-  ) {
-    const value = -node.argument.value;
-    return Number.isFinite(value) && !Object.is(value, -0)
-      ? { found: true, value }
-      : { found: false };
-  }
-  return { found: false };
+  return literal.found && !Object.is(literal.value, -0)
+    ? literal
+    : { found: false };
 };

@@ -1,3 +1,4 @@
+import type { JavaScriptModuleResolutionMode } from "./javascriptModuleResolutionMode.js";
 import type * as t from "@babel/types";
 
 import { inspectElectronBrowserNode } from "./electronStaticAnalysisBrowser.js";
@@ -9,8 +10,9 @@ import type { JavaScriptFindingContext } from "./javascriptStaticAnalysisState.j
 export const inspectElectronStaticNode = (
   node: t.Node,
   context: JavaScriptFindingContext,
+  resolutionMode?: JavaScriptModuleResolutionMode,
 ): void => {
   inspectElectronBrowserNode(node, context);
   inspectElectronIpcNode(node, context);
-  inspectElectronNativeNode(node, context);
+  inspectElectronNativeNode(node, context, resolutionMode);
 };

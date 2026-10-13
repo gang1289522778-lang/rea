@@ -1,4 +1,5 @@
 import * as t from "@babel/types";
+import { typescriptImportResolutionMode } from "./typescriptImportResolutionMode.js";
 
 import {
   failedJavaScriptSemanticIr,
@@ -1089,6 +1090,7 @@ const bindImports = (
   scope: JavaScriptSemanticScopeState,
   state: JavaScriptSemanticAnalysisState,
 ): void => {
+  const resolutionMode = typescriptImportResolutionMode(node);
   for (const specifier of node.specifiers) {
     const importedPath = t.isImportDefaultSpecifier(specifier)
       ? ["default"]
@@ -1103,7 +1105,11 @@ const bindImports = (
       mutable: false,
       definitionNode: specifier.local,
       initializer: null,
-      directOrigin: { specifier: node.source.value, importedPath },
+      directOrigin: {
+        specifier: node.source.value,
+        importedPath,
+        ...(resolutionMode === undefined ? {} : { resolutionMode }),
+      },
       runtimeImport:
         node.importKind !== "type" &&
         node.importKind !== "typeof" &&

@@ -76,12 +76,14 @@ describe("static Electron application analysis", () => {
     // explicit dynamic flag rather than a "*" sentinel inside members.
     const accesses = graph.nodes.flatMap((node) =>
       node.kind === "native-export"
-        ? node.observations.map(({ properties }) => ({
-            members: Array.isArray(properties.requested_members)
-              ? properties.requested_members
-              : [],
-            dynamicMemberAccess: properties.dynamic_member_access ?? false,
-          }))
+        ? node.observations
+            .filter(({ properties }) => properties.type_only !== true)
+            .map(({ properties }) => ({
+              members: Array.isArray(properties.requested_members)
+                ? properties.requested_members
+                : [],
+              dynamicMemberAccess: properties.dynamic_member_access ?? false,
+            }))
         : [],
     );
 
@@ -91,6 +93,13 @@ describe("static Electron application analysis", () => {
       resolved_native_addon_bindings: 1,
     });
     expect(accesses).toEqual([{ members: [], dynamicMemberAccess: true }]);
+    expect(
+      graph.nodes
+        .flatMap(({ kind, observations }) =>
+          kind === "native-export" ? observations : [],
+        )
+        .filter(({ properties }) => properties.type_only === true),
+    ).toHaveLength(3);
   });
 
   it("maps Electron boundaries through bundler-renamed bindings", async () => {
@@ -442,6 +451,14 @@ module.exports = { selected, validate };
 `,
     ),
     writeFile(join(root, "native", "addon.node"), Buffer.from([0, 1, 2, 3])),
+    writeFile(
+      join(root, "types.mts"),
+      [
+        'import type { Api } from "./native/addon.node";',
+        'export type { Api } from "./native/addon.node";',
+        'type Inline = import("./native/addon.node").Api;',
+      ].join("\n"),
+    ),
   ]);
   return root;
 };

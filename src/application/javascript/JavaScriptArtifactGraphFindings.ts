@@ -171,6 +171,7 @@ const addReference = (
           ? moduleResolutionModeForJavaScriptReference(
               input.file.path,
               input.value.kind,
+              input.value.resolutionMode,
             )
           : null,
       resolved_path: resolved?.path ?? null,
@@ -437,6 +438,7 @@ const resolveReference = (
               moduleKind: moduleResolutionModeForJavaScriptReference(
                 sourcePath,
                 reference.kind,
+                reference.resolutionMode,
               ),
             }
           : {}),

@@ -1,7 +1,47 @@
 import { parse, type ParserOptions, type ParserPlugin } from "@babel/parser";
+import * as t from "@babel/types";
+import { traverseJavaScriptAst } from "./javascriptSemanticTraversal.js";
 
 /** Babel AST produced by REA's inert JavaScript parser boundary. */
 export type ParsedJavaScriptSource = ReturnType<typeof parse>;
+
+/** Babel 8 uses [] for both an omitted attribute clause and an explicit with {}. */
+const preserveModuleAttributePresence = (
+  file: ParsedJavaScriptSource,
+  source: string,
+): ParsedJavaScriptSource => {
+  const commentEnds = new Map<number, number>();
+  for (const comment of file.comments ?? [])
+    if (typeof comment.start === "number" && typeof comment.end === "number")
+      commentEnds.set(comment.start, comment.end);
+  traverseJavaScriptAst(file.program, {
+    enter: (node) => {
+      if (
+        (!t.isImportDeclaration(node) &&
+          !t.isExportNamedDeclaration(node) &&
+          !t.isExportAllDeclaration(node)) ||
+        node.attributes?.length !== 0 ||
+        node.source?.end === null ||
+        node.source?.end === undefined ||
+        node.end === null ||
+        node.end === undefined
+      )
+        return;
+      // The parser already owns the declaration/source spans. Only trivia and
+      // the optional semicolon can follow the source when no clause is present.
+      let cursor = node.source.end;
+      while (cursor < node.end) {
+        const commentEnd = commentEnds.get(cursor);
+        if (commentEnd !== undefined && commentEnd <= node.end)
+          cursor = commentEnd;
+        else if (/\s|;/u.test(source[cursor] ?? "")) cursor += 1;
+        else return;
+      }
+      delete node.attributes;
+    },
+  });
+  return file;
+};
 
 /**
  * Babel plugins for one source path. Single owner for TypeScript/JSX
@@ -130,11 +170,12 @@ export const parseJavaScriptSource = (
     });
     // Unambiguous mode retains module-only diagnostics after choosing a script.
     // The .cjs extension establishes wrapper mode, so obtain its own diagnostics.
-    return commonjs &&
-      file.program.sourceType === "script" &&
-      file.errors.length > 0
-      ? parse(source, { ...options, sourceType: "commonjs" })
-      : file;
+    return preserveModuleAttributePresence(
+      commonjs && file.program.sourceType === "script" && file.errors.length > 0
+        ? parse(source, { ...options, sourceType: "commonjs" })
+        : file,
+      source,
+    );
   } catch (cause: unknown) {
     // Unparseable source is represented by the null return.
     void cause;
