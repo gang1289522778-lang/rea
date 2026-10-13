@@ -406,14 +406,7 @@ struct SnapshotWork {
 static void copySnapshot(napi_env, void* pointer) {
   auto& work = *static_cast<SnapshotWork*>(pointer);
   try {
-    BCRYPT_ALG_HANDLE algorithm = nullptr;
-    require(BCryptOpenAlgorithmProvider(&algorithm, BCRYPT_SHA256_ALGORITHM, nullptr, 0) == 0,
-            "Initialize snapshot SHA-256 failed", work.source->path, ERROR_GEN_FAILURE);
-    struct Algorithm { BCRYPT_ALG_HANDLE handle; ~Algorithm() { BCryptCloseAlgorithmProvider(handle, 0); } } owner{algorithm};
-    BCRYPT_HASH_HANDLE hash = nullptr;
-    require(BCryptCreateHash(algorithm, &hash, nullptr, 0, nullptr, 0, 0) == 0,
-            "Create snapshot SHA-256 state failed", work.source->path, ERROR_GEN_FAILURE);
-    struct Hash { BCRYPT_HASH_HANDLE handle; ~Hash() { BCryptDestroyHash(handle); } } hashOwner{hash};
+    Sha256Hash hash(work.source->path);
     std::array<unsigned char, 65536> buffer;
     while (true) {
       require(!work.root->snapshotCancelled.load(), "Admitted snapshot was cancelled", work.path, ERROR_OPERATION_ABORTED);
@@ -422,12 +415,9 @@ static void copySnapshot(napi_env, void* pointer) {
               "Read admitted source handle failed", work.source->path);
       if (count == 0) break;
       writeBytes(work.destination.get(), buffer.data(), count, work.path);
-      require(BCryptHashData(hash, buffer.data(), count, 0) == 0,
-              "Hash admitted snapshot bytes failed", work.source->path, ERROR_GEN_FAILURE);
+      hash.update(buffer.data(), count);
     }
-    std::array<unsigned char, 32> digest;
-    require(BCryptFinishHash(hash, digest.data(), digest.size(), 0) == 0,
-            "Finish snapshot SHA-256 failed", work.source->path, ERROR_GEN_FAILURE);
+    const auto digest = hash.finish();
     require(FlushFileBuffers(work.destination.get()), "Flush private snapshot failed", work.path);
     work.digest = hex(digest.data(), digest.size());
   } catch (const Failure& failure) {

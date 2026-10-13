@@ -464,6 +464,7 @@ class NativeMacOSClient implements AnalysisClient {
       case "observe_native_ui":
       case "capture_native_ui_scenario":
       case "observe_native_calls":
+      case "capture_windows_window_screenshot":
         return Promise.resolve(
           err(
             new AnalysisCapabilityUnavailableError(

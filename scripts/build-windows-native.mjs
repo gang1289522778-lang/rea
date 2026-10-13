@@ -91,7 +91,12 @@ const artifact = "rea-windows-x64.node";
 // MSVC short-import libraries do not produce a correct Node import table with
 // GNU ld. Generate a GNU delay-import library for the exact stable Node-API
 // symbols; addon.cc binds it to the host executable, whatever its file name.
-const sources = ["addon.cc", "filesystem.cc", "process.cc"];
+const sources = [
+  "addon.cc",
+  "filesystem.cc",
+  "process.cc",
+  "window_capture.cc",
+];
 const sourceText = (
   await Promise.all(
     sources.map((path) =>
@@ -129,10 +134,16 @@ run(compiler, [
     ? "tests/fixtures/windows-native-inspection-failure.cc"
     : "native/windows/src/filesystem.cc",
   "native/windows/src/process.cc",
+  "native/windows/src/window_capture.cc",
   library,
   "-ladvapi32",
   "-lbcrypt",
+  "-lgdi32",
   "-lntdll",
+  "-lole32",
+  "-luser32",
+  "-lwindowscodecs",
+  "-luuid",
   "-o",
   join(output, artifact),
 ]);

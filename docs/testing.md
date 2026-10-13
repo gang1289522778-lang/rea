@@ -393,6 +393,14 @@ first deletion failure checks retained NTFS ownership, later-query recovery,
 successful-admission caching, and environment-teardown cleanup. It neither
 establishes the cause of the intermittent #1701 host failure nor replaces
 verification with the shipped production artifact.
+A selected-window screenshot claim needs a separate interactive ordinary-user
+Windows desktop fixture: the fixture must create one source-owned PE window,
+provide its PID/HWND to both CLI and stdio MCP, and verify target binding, PNG
+digest/dimensions, destroyed-window refusal, and the absence of
+desktop/region/title-search fallbacks. Cross-compiling the addon or a hosted
+Windows runner without an interactive desktop does not prove that capture lane.
+Until that lane runs against the packaged artifact, report only contract,
+mock-boundary, and native-build coverage.
 `npm run verify:ghidra:windows:package` additionally packs and installs REA into
 an isolated prefix and runs ordinary-user CLI/MCP operations against their
 canonical schemas. Run the controlled fixture generator before that lane, or

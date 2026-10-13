@@ -13,6 +13,7 @@ import { AnalysisInputError } from "../domain/analysisErrorCore.js";
 import { projectInputIssues } from "../domain/inputIssueProjection.js";
 import { safeParseJson } from "../domain/safeJson.js";
 import { nativeUiScenarioInputSchema } from "../domain/native/nativeUiObservation.js";
+import { windowsWindowScreenshotInputSchema } from "../domain/native/windowsWindowScreenshot.js";
 import { PRODUCT_IDENTITY } from "../identity.js";
 import { logCliCommand } from "../cliLogging.js";
 import { CLI_COMMANDS } from "../cliCommandNames.js";
@@ -112,6 +113,53 @@ export const registerUtilityCommands = (
         }),
     });
   }
+  cli.command(CLI_COMMANDS.captureWindowsWindowScreenshot, {
+    description:
+      "Capture one passive PNG of the exact HWND owned by an active PE application",
+    args: z.object({
+      path: z.string().describe("Local PE application path"),
+    }),
+    options: z.object({
+      pid: z.number().int().positive().describe("Existing application PID"),
+      windowHandle: z
+        .string()
+        .describe("Exact canonical lowercase HWND, for example 0x1234"),
+      maxDimension: z
+        .number()
+        .int()
+        .min(1)
+        .max(4096)
+        .default(2048)
+        .describe("Maximum rendered PNG width or height"),
+    }),
+    run: ({ args, options }) =>
+      logCliCommand(
+        logger,
+        CLI_COMMANDS.captureWindowsWindowScreenshot,
+        async () => {
+          const parsed = windowsWindowScreenshotInputSchema.safeParse({
+            pid: options.pid,
+            window_handle: options.windowHandle,
+            max_dimension: options.maxDimension,
+          });
+          if (!parsed.success)
+            return invalidNativeUiScenarioInput(
+              "capture_windows_window_screenshot",
+              projectInputIssues(parsed.error.issues, {
+                pid: options.pid,
+                window_handle: options.windowHandle,
+                max_dimension: options.maxDimension,
+              }),
+            );
+          return runProviderAnalysis(
+            args.path,
+            "capture_windows_window_screenshot",
+            parsed.data,
+            logger,
+          );
+        },
+      ),
+  });
   registerReferenceSourceCommand(cli, logger, environment);
 };
 

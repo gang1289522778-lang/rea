@@ -105,6 +105,9 @@ export const binarySessionStatus = ({
         open: true,
         ...common,
         ...binaryTargetSummary(target),
+        ...(target.format === "pe"
+          ? { executable_role: target.executableRole }
+          : {}),
       };
 };
 

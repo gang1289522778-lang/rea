@@ -15,6 +15,16 @@ const OWNED_PROCESS_OPERATIONS: ReadonlySet<string> = new Set([
   "capture_native_ui_scenario",
   "observe_native_calls",
 ]);
+const MACOS_NATIVE_OPERATIONS: ReadonlySet<string> = new Set([
+  "observe_native_ui",
+  "capture_native_ui_scenario",
+  "observe_native_calls",
+  "inspect_macho",
+  "inspect_signature",
+  "inspect_plist",
+  "list_architectures",
+  "demangle_swift",
+]);
 
 /** Declare native host coverage without creating a command runner. */
 export const nativeMacOSCapabilities = (
@@ -23,7 +33,9 @@ export const nativeMacOSCapabilities = (
   const available = platform === "darwin";
   return Object.freeze(
     [
-      ...NATIVE_TOOL_CONTRACTS,
+      ...NATIVE_TOOL_CONTRACTS.filter((contract) =>
+        MACOS_NATIVE_OPERATIONS.has(contract.name),
+      ),
       { name: "inspect_native_dispatch_metadata" as const },
     ].map((contract): CapabilityDescriptor => {
       const availability = available

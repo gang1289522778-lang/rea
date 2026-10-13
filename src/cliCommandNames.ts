@@ -104,6 +104,7 @@ export const CLI_COMMANDS = Object.freeze({
   observeNativeUi: "observe-native-ui",
   observeNativeCalls: "observe-native-calls",
   captureNativeUiScenario: "capture-native-ui-scenario",
+  captureWindowsWindowScreenshot: "capture-windows-window-screenshot",
   inspectMacho: "inspect-macho",
   inspectSignature: "inspect-signature",
   listArchitectures: "list-architectures",

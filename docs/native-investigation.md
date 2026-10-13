@@ -404,6 +404,45 @@ owned helper per scenario, removes its temporary compiler cache and stops its
 helper on cancellation. It does not launch or own the selected application. UI
 actions may change application data or trigger network activity.
 
+### Windows selected-window screenshots
+
+`capture_windows_window_screenshot` is a separate, narrower Windows x64
+capability for an active PE **application** target. It captures one passive PNG
+for an exact existing PID and canonical lowercase `HWND` string, for example:
+
+```sh
+rea capture-windows-window-screenshot C:\Apps\Example.exe --pid 1234 --window-handle 0x1234 --json
+```
+
+In an MCP session, call `open_binary` for the PE application first, then supply
+the same `pid` and `window_handle`. REA verifies that the HWND belongs to that
+PID, reads the process start time and image path, and checks the selected
+on-disk executable SHA-256 before and after capture. The result retains an
+inline PNG with its digest, byte count, rendered/source dimensions, title, and
+the exact process/window identity.
+
+The capture is deliberately confined to the selected client area through a
+bounded `WM_PRINT` request. It does not enumerate windows, search titles,
+capture a desktop or region, write a caller-selected file, launch a target,
+send input, request elevation, or expose UI Automation. A window that is
+protected, hung, elevated, minimized, GPU-composited, or custom-drawn can fail
+or render incompletely; REA fails explicitly and never falls back to a broad
+desktop capture. The native request has a five-second deadline, captures at
+most 4 million source pixels, scales the returned image to a caller-selected
+maximum dimension (2,048 by default), and retains at most 3 MiB of PNG bytes.
+
+`WM_PRINT` asks the selected process to render into REA's private bitmap, so it
+can run the target's paint handler even though REA sends no UI input. That paint
+handler can change application UI state and trigger ordinary target filesystem
+or network effects. A returned frame is one observation at read time, not proof
+of physical-display visibility or an accessibility tree. The title and image can
+contain private application data and are retained only as Evidence for this
+explicitly selected window.
+
+Accessibility capture, UI Automation, and action scenarios are intentionally
+not part of this Windows screenshot-only facet. Do not present it as parity with
+the macOS `observe_native_ui` workflow.
+
 ## Native call observation
 
 `observe_native_calls` / `rea observe-native-calls <app-or-mach-o> <input-json>`

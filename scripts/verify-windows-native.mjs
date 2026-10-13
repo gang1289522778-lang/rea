@@ -645,6 +645,7 @@ setInterval(()=>{},1000);\n`,
       `${quote(boundaryFixture)} environment`,
       workspace,
       [
+        ...Array.from({ length: 80 }, (_, index) => `REA_EXTRA_${index}=value`),
         "z_REA=z",
         "_REA=underscore",
         "A_REA=a",

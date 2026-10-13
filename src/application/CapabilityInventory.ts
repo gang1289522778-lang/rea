@@ -34,6 +34,9 @@ const statusSchema = z.object({
   open: z.boolean(),
   kind: z.enum(["executable", "database", "archive", "artifact"]).optional(),
   format: z.string().optional(),
+  executable_role: z
+    .enum(["application", "shared-library", "non-executable"])
+    .optional(),
   capabilities: z
     .array(providerCapabilitySet)
     .transform(expandProviderCapabilities),
@@ -94,6 +97,11 @@ type AvailabilityContext = {
     | "artifact"
     | undefined;
   readonly targetFormat: string | undefined;
+  readonly targetExecutableRole:
+    | "application"
+    | "shared-library"
+    | "non-executable"
+    | undefined;
   readonly descriptors: ReadonlyMap<string, ProviderDescriptor>;
   readonly policy: AvailabilityPolicy;
 };
@@ -148,6 +156,9 @@ const MACHO_TARGET_OPERATIONS: ReadonlySet<string> = new Set([
   "observe_native_ui",
   "capture_native_ui_scenario",
 ]);
+const PE_APPLICATION_TARGET_OPERATIONS: ReadonlySet<string> = new Set([
+  "capture_windows_window_screenshot",
+]);
 
 const NAVIGATION_CONTEXT_MODES = [
   {
@@ -181,6 +192,7 @@ export const buildCapabilityInventory = (
       targetOpen: status.open,
       targetKind: status.kind,
       targetFormat: status.format,
+      targetExecutableRole: status.executable_role,
       descriptors,
       policy,
     });
@@ -567,6 +579,7 @@ const targetAvailability = ({
   kind,
   targetKind,
   targetFormat,
+  targetExecutableRole,
   targetOpen,
 }: AvailabilityContext): Availability | null => {
   if (FRIDA_OPERATION_NAMES.has(name)) return null;
@@ -595,6 +608,18 @@ const targetAvailability = ({
       reason: "target_unsupported",
       remediation:
         "Call open_binary with a Mach-O executable or an app bundle whose main executable is Mach-O.",
+    };
+  if (
+    targetOpen &&
+    PE_APPLICATION_TARGET_OPERATIONS.has(name) &&
+    (targetKind !== "executable" ||
+      targetFormat !== "pe" ||
+      targetExecutableRole !== "application")
+  )
+    return {
+      reason: "target_unsupported",
+      remediation:
+        "Call open_binary with a PE application executable on a Windows x64 host.",
     };
   return null;
 };

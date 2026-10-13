@@ -43,10 +43,12 @@ std::wstring wide(napi_env env, napi_value value) {
 double numeric(napi_env env, napi_value value) {
   double result; check(napi_get_value_double(env, value, &result)); return result;
 }
-std::vector<napi_value> array(napi_env env, napi_value value) {
+std::vector<napi_value> array(napi_env env, napi_value value, uint32_t maximumLength) {
   bool valid; check(napi_is_array(env, value, &valid));
   require(valid, "Native arguments must be an array", L"", ERROR_INVALID_PARAMETER);
   uint32_t length; check(napi_get_array_length(env, value, &length));
+  require(length <= maximumLength, "Native argument list exceeds the fixed operation limit", L"",
+          ERROR_INVALID_PARAMETER);
   std::vector<napi_value> result(length);
   for (uint32_t index = 0; index < length; ++index)
     check(napi_get_element(env, value, index, &result[index]));
@@ -86,6 +88,14 @@ napi_value failureValue(napi_env env, const Failure& failure) {
     set(env, error, "constraint", string(env, failure.constraint));
     set(env, error, "requestedPath", string(env, failure.path));
     set(env, error, "win32Code", number(env, failure.win32));
+    const char* semantic = nullptr;
+    switch (failure.kind) {
+      case FailureKind::Native: break;
+      case FailureKind::ArtifactChanged: semantic = "artifact_changed"; break;
+      case FailureKind::WindowOwnerMismatch: semantic = "window_owner_mismatch"; break;
+      case FailureKind::ProcessIdentityMismatch: semantic = "process_identity_mismatch"; break;
+    }
+    if (semantic != nullptr) set(env, error, "failureKind", string(env, std::string(semantic)));
     set(env, error, "win32Message", string(env, detail));
     if (failure.runtimeDirectoryUnallocated)
       set(env, error, "runtimeAllocation", string(env, std::string("not-started")));
@@ -127,11 +137,12 @@ static napi_value call(napi_env env, napi_callback_info info) {
     check(napi_get_cb_info(env, info, &count, args.data(), nullptr, &data));
     require(count == 2, "Native call requires operation and arguments", L"", ERROR_INVALID_PARAMETER);
     const auto operation = wide(env, args[0]);
-    const auto values = array(env, args[1]);
+    const auto values = array(env, args[1], 64);
     if (operation == L"inspect") {
       require(values.empty(), "Inspect takes no arguments", L"", ERROR_INVALID_PARAMETER);
       return inspect(env, static_cast<InspectionContext*>(data)->probe);
     }
+    if (operation == L"capture_window_png") return windowCaptureCall(env, values);
     if (operation.rfind(L"process_", 0) == 0) return processCall(env, operation, values);
     return filesystemCall(env, operation, values);
   } catch (const Failure& failure) {

@@ -10,12 +10,16 @@ import {
   NATIVE_MACOS_PROVIDER_IDENTITY,
   nativeMacOSCapabilities,
 } from "../native/NativeMacOSProviderMetadata.js";
+import {
+  NATIVE_WINDOWS_UI_PROVIDER_IDENTITY,
+  nativeWindowsUiCapabilities,
+} from "../windows/NativeWindowsUiProviderMetadata.js";
 
 type AuxiliaryProviderDeclaration = ConstructorParameters<
   typeof LazyAnalysisProvider
 >[0];
 
-/** Wire the three existing auxiliary AnalysisProvider implementations lazily. */
+/** Wire auxiliary AnalysisProvider implementations lazily. */
 export const auxiliaryAnalysisProviderDeclarations = (
   selectedEnvironment: Readonly<NodeJS.ProcessEnv>,
   platform: NodeJS.Platform = process.platform,
@@ -38,6 +42,15 @@ export const auxiliaryAnalysisProviderDeclarations = (
         const { NativeMacOSProvider } =
           await import("../native/NativeMacOSProvider.js");
         return new NativeMacOSProvider(environment, undefined, platform);
+      },
+    },
+    {
+      identity: NATIVE_WINDOWS_UI_PROVIDER_IDENTITY,
+      capabilities: nativeWindowsUiCapabilities(platform),
+      load: async () => {
+        const { NativeWindowsUiProvider } =
+          await import("../windows/NativeWindowsUiProvider.js");
+        return new NativeWindowsUiProvider(undefined, platform);
       },
     },
     {

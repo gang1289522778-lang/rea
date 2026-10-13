@@ -97,6 +97,18 @@ run, use `observe_native_calls` with explicit breakpoints and a bounded
 runs and may change files or use the network. Hardened-runtime targets need the
 `get-task-allow` entitlement.
 
+For one passive runtime frame of an already-running Windows PE application,
+use `capture_windows_window_screenshot` only after opening that exact PE target.
+Supply the process PID and its exact canonical lowercase HWND (`0x...`). The
+result binds that window to the target's process image path, start time and
+on-disk SHA-256 before/after capture, then retains one bounded inline PNG. Do
+not substitute a title, foreground window, desktop, region, accessibility tree,
+or arbitrary screen-control tool. This Windows facet sends no UI input and does
+not start the target, but its bounded `WM_PRINT` request can run a selected
+window's paint handler. A captured image may contain private data and does not
+prove a physically visible frame, full GPU compositing, or UI accessibility.
+Failure to capture must remain a gap; never fall back to a broad desktop shot.
+
 Use `binary_session` with no arguments to check the open target, selected
 provider, and alignment. Its default `result.tool_availability` carries a
 complete inventory grouped by shared facts. Expand each group's `names` and
