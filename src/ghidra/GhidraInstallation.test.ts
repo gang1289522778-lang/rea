@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { spawnSync } from "node:child_process";
 
 import { elf, fat, thinMach } from "../domain/binaryTarget.fixture.js";
 import { projectGhidraDoctorInspection } from "./GhidraDoctor.js";
 import {
+  ghidraInstallationDiagnostics,
   ghidraJavaEnvironment,
   inspectGhidraInstallation,
   type GhidraExecutableHeaderProbe,
@@ -15,6 +17,14 @@ import {
   ghidraApplicationProperties,
   ghidraJavaRequirement,
 } from "./GhidraInstallationPolicy.js";
+
+// The real Java probe shells out via spawnSync; stub it so one test can run
+// the real probeJava against captured `-XshowSettings:properties` output.
+// Every other test overrides probeJava, so the stub never fires for them.
+vi.mock("node:child_process", async (importOriginal) => {
+  const original = await importOriginal<typeof import("node:child_process")>();
+  return { ...original, spawnSync: vi.fn() };
+});
 
 const INSTALL = "/opt/ghidra";
 const PROPERTIES = `${INSTALL}/Ghidra/application.properties`;
@@ -887,5 +897,106 @@ describe("Ghidra native decompiler admission", () => {
       ),
       remediation: expect.stringContaining("os/mac_arm_64/decompile"),
     });
+  });
+
+  it("rejects a JDK whose os.arch selects a different native decompiler directory", () => {
+    const result = inspectGhidraInstallation(
+      {
+        environment: {},
+        installDir: INSTALL,
+        platform: "darwin",
+        architecture: "arm64",
+      },
+      host({
+        probeJava: () => ({ ...JAVA, osArch: "x86_64" }),
+      }),
+    );
+    expect(result.status).toBe("unavailable");
+    if (result.status !== "unavailable") return;
+    expect(
+      result.checks.find(({ name }) => name === "native_decompiler"),
+    ).toMatchObject({
+      status: "failed",
+      code: "executable_missing",
+      detail: expect.stringContaining(
+        "JVM reports os.arch=x86_64, so Ghidra selects its native decompiler from os/mac_x86_64",
+      ),
+      remediation: expect.stringContaining("JAVA_HOME"),
+    });
+  });
+
+  it("accepts a JDK whose os.arch selects the validated native decompiler directory", () => {
+    const result = inspectGhidraInstallation(
+      {
+        environment: {},
+        installDir: INSTALL,
+        platform: "darwin",
+        architecture: "arm64",
+      },
+      host({
+        probeJava: () => ({ ...JAVA, osArch: "aarch64" }),
+      }),
+    );
+    expect(result.status).toBe("available");
+  });
+
+  it.each(["riscv64", "sparcv9", ""])(
+    "refuses an unrecognized JVM os.arch (%s) instead of assuming alignment",
+    (osArch) => {
+      const result = inspectGhidraInstallation(
+        {
+          environment: {},
+          installDir: INSTALL,
+          platform: "darwin",
+          architecture: "arm64",
+        },
+        host({
+          probeJava: () => ({ ...JAVA, osArch }),
+        }),
+      );
+      expect(result.status).toBe("unavailable");
+      if (result.status !== "unavailable") return;
+      expect(
+        result.checks.find(({ name }) => name === "native_decompiler"),
+      ).toMatchObject({
+        status: "failed",
+        detail: expect.stringContaining("unrecognized os.arch="),
+      });
+    },
+  );
+});
+
+describe("Ghidra Java probe os.arch extraction", () => {
+  it("extracts os.arch through the real Java probe into the installation diagnostics", () => {
+    vi.mocked(spawnSync).mockReturnValue({
+      status: 0,
+      stdout: "",
+      stderr: [
+        "Property settings:",
+        "    file.encoding = UTF-8",
+        "    java.home = /usr/lib/jvm/jdk-21",
+        "    java.version = 21.0.11",
+        "    java.vm.name = OpenJDK 64-Bit Server VM",
+        "    os.arch = x86_64",
+        "    sun.arch.data.model = 64",
+        "",
+      ].join("\n"),
+    } as never);
+    try {
+      // No host override: the real system host runs the real probeJava
+      // against the stubbed spawnSync.
+      const inspection = inspectGhidraInstallation({
+        environment: {},
+        installDir: INSTALL,
+        javaHome: "/usr/lib/jvm/jdk-21",
+        platform: "linux",
+        architecture: "x64",
+      });
+      expect(ghidraInstallationDiagnostics(inspection)).toMatchObject({
+        java_os_arch: "x86_64",
+      });
+    } finally {
+      vi.mocked(spawnSync).mockReset();
+    }
   });
 });
