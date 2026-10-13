@@ -48,6 +48,7 @@ export interface DoctorCheck {
   readonly classification:
     | "healthy"
     | "missing_dependency"
+    | "runtime_failure"
     | "unsupported_host"
     | "unsupported_target"
     | "missing_analysis_engine"

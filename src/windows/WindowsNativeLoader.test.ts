@@ -106,24 +106,28 @@ describe("packaged Windows native admission", () => {
   });
 
   it.each([
-    { platform: "linux" as const },
-    { architecture: "arm64" },
-    { nodeApiVersion: "7" },
-    { nodeApiVersion: undefined },
-    { packageVersion: "2.0.0" },
-  ])("rejects incompatible host metadata before loading: %j", (override) => {
-    const value = fixture();
-    expect(
-      loadWindowsNativeAuthority({ ...value.host, ...override }).available,
-    ).toBe(false);
-    expect(value.loads()).toBe(0);
-  });
+    [{ platform: "linux" as const }, "host"],
+    [{ architecture: "arm64" }, "host"],
+    [{ nodeApiVersion: "7" }, "host"],
+    [{ nodeApiVersion: undefined }, "host"],
+    [{ packageVersion: "2.0.0" }, "artifact"],
+  ] as const)(
+    "rejects incompatible metadata before loading: %j",
+    (override, failureStage) => {
+      const value = fixture();
+      expect(
+        loadWindowsNativeAuthority({ ...value.host, ...override }),
+      ).toMatchObject({ available: false, failureStage });
+      expect(value.loads()).toBe(0);
+    },
+  );
 
   it("rejects tampering even when the original file was a valid PE image", () => {
     const value = fixture();
     value.bytes[127] = 1;
     expect(loadWindowsNativeAuthority(value.host)).toMatchObject({
       available: false,
+      failureStage: "artifact",
       reason: expect.stringContaining("SHA-256"),
     });
     expect(value.loads()).toBe(0);
@@ -167,28 +171,56 @@ describe("packaged Windows native admission", () => {
       .digest("hex");
     expect(loadWindowsNativeAuthority(value.host)).toMatchObject({
       available: false,
+      failureStage: "artifact",
       reason: expect.stringContaining("PE32+"),
     });
     expect(value.loads()).toBe(0);
   });
 
-  it("preserves host permission failure rather than promoting a partial probe", () => {
-    const value = fixture();
-    expect(
-      loadWindowsNativeAuthority({
-        ...value.host,
-        loadArtifact: () => ({
-          call: () => {
-            throw new Error("private DACL: access denied");
-          },
+  it.each([
+    "private DACL: access denied (5)",
+    "remove_owned_directory: directory is not empty (145)",
+  ])(
+    "preserves self-test failure %s rather than promoting a partial probe",
+    (reason) => {
+      const value = fixture();
+      expect(
+        loadWindowsNativeAuthority({
+          ...value.host,
+          loadArtifact: () => ({
+            call: () => {
+              throw new Error(reason);
+            },
+          }),
         }),
-      }),
-    ).toMatchObject({
-      available: false,
-      retryable: true,
-      reason: expect.stringContaining("private DACL: access denied"),
-    });
-  });
+      ).toMatchObject({
+        available: false,
+        failureStage: "self-test",
+        retryable: true,
+        reason: `REA Windows native self-test failed: ${reason}`,
+      });
+    },
+  );
+
+  it.each(["readManifest", "readArtifact", "loadArtifact"] as const)(
+    "keeps a %s failure in artifact admission",
+    (operation) => {
+      const value = fixture();
+      const loaded = loadWindowsNativeAuthority({
+        ...value.host,
+        [operation]: () => {
+          throw new Error("load boundary failure (5)");
+        },
+      });
+      expect(loaded).toMatchObject({
+        available: false,
+        failureStage: "artifact",
+        reason:
+          "REA Windows native controls are unavailable: load boundary failure (5)",
+      });
+      expect(loaded).not.toHaveProperty("retryable");
+    },
+  );
 
   it("requires every inspected native fact", () => {
     const value = fixture();
@@ -196,7 +228,10 @@ describe("packaged Windows native admission", () => {
       ...value.host,
       loadArtifact: () => ({ call: () => ({ privateDacl: true }) }),
     });
-    expect(loaded.available).toBe(false);
+    expect(loaded).toMatchObject({
+      available: false,
+      failureStage: "inspection",
+    });
     expect(loaded).not.toHaveProperty("retryable");
   });
 });

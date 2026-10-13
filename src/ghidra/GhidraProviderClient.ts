@@ -98,10 +98,7 @@ import {
   validateGhidraExtensionProfile,
   ghidraExtensionLimitations,
 } from "./extensions/GhidraExtensions.js";
-import {
-  windowsNativeAuthorityUnavailableReason,
-  hasWindowsNativeAuthority,
-} from "../process/WindowsAuthority.js";
+import { inspectWindowsNativeReadiness } from "../process/WindowsAuthority.js";
 import { ghidraRawBinaryLanguage } from "./GhidraRawBinaryLanguage.js";
 
 /** Production seam for exercising provider projection without a real process. */
@@ -979,15 +976,16 @@ const ghidraClientPrerequisites = (
         diagnostics: ghidraInstallationDiagnostics(installation),
       }),
     );
-  if (
-    installation.platform === "win32" &&
-    !hasWindowsNativeAuthority(installation.platform)
-  )
+  const readiness =
+    installation.platform === "win32"
+      ? inspectWindowsNativeReadiness(installation.platform)
+      : undefined;
+  if (readiness?.available === false)
     return err(
       new AnalysisCapabilityUnavailableError(
         "ghidra",
         "health",
-        windowsNativeAuthorityUnavailableReason(installation.platform),
+        readiness.reason,
       ),
     );
   if (profile === undefined || profile.provider.id !== "ghidra")

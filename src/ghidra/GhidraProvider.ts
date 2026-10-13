@@ -4,6 +4,7 @@ import type {
   AnalysisClientContext,
   AnalysisProfileResolutionOptions,
   AnalysisProviderCandidate,
+  AnalysisProviderReadinessSnapshot,
   CapabilityDescriptor,
   ProviderAvailability,
   ProviderIdentity,
@@ -55,8 +56,8 @@ import {
   type GhidraProviderClientFactory,
 } from "./GhidraProviderClient.js";
 import {
-  windowsNativeAuthorityUnavailableReason,
-  hasWindowsNativeAuthority,
+  inspectWindowsNativeReadiness,
+  type WindowsNativeReadiness,
   windowsNativeCapabilities,
 } from "../process/WindowsAuthority.js";
 
@@ -100,22 +101,43 @@ export class GhidraProvider implements AnalysisProviderCandidate {
   }
 
   inspectAvailability(): ProviderAvailability {
+    return this.inspectReadinessSnapshot().availability;
+  }
+
+  inspectReadinessSnapshot(): AnalysisProviderReadinessSnapshot {
     const installation = this.#inspectInstallation();
+    const readiness =
+      installation.platform === "win32"
+        ? inspectWindowsNativeReadiness(installation.platform)
+        : undefined;
+    return {
+      availability: this.#availability(installation, readiness),
+      capabilities:
+        readiness === undefined
+          ? CAPABILITIES
+          : windowsP0Capabilities(readiness),
+    };
+  }
+
+  #availability(
+    installation: GhidraInstallationInspection,
+    readiness: WindowsNativeReadiness | undefined,
+  ): ProviderAvailability {
     const diagnostics = ghidraInstallationDiagnostics(installation);
-    if (
-      installation.status === "available" &&
-      installation.platform === "win32" &&
-      !hasWindowsNativeAuthority(installation.platform)
-    )
+    if (installation.status === "available" && readiness?.available === false)
       return {
         status: "unavailable",
-        code: "unsupported_host",
-        reason: windowsNativeAuthorityUnavailableReason(installation.platform),
+        code: readiness.code,
+        reason: readiness.reason,
         diagnostics: {
           ...diagnostics,
           windows_security: jsonObjectSchema.parse(
-            windowsNativeCapabilities(installation.platform),
+            windowsNativeCapabilities(installation.platform, readiness),
           ),
+          windows_native_failure: {
+            stage: readiness.failureStage,
+            remediation: readiness.remediation,
+          },
         },
       };
     return installation.status === "available"

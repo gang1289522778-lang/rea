@@ -8,7 +8,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { describe, expect, it, onTestFinished, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import * as nativeLoader from "../windows/WindowsNativeLoader.js";
 import { fixtureDosLoadImage } from "./GhidraLoadImage.fixture.js";
 import { fixtureRawBinaryLoadImage } from "./GhidraRawBinaryLoadImage.fixture.js";
 import {
@@ -30,13 +31,12 @@ import { err, ok } from "../domain/result.js";
 import type { Result } from "../domain/result.js";
 import { GhidraSessionError } from "./GhidraSessionError.js";
 import { silentLogger } from "../logger.js";
-import * as WindowsNativeLoader from "../windows/WindowsNativeLoader.js";
-import { WINDOWS_NATIVE_AUTHORITY_UNAVAILABLE_REASON } from "../process/WindowsAuthority.js";
 import { ProviderCleanupError } from "../domain/providerCleanupError.js";
 import { projectAnalysisError } from "../domain/analysisErrorProjection.js";
 import { ProviderStartupDeadline } from "../process/ProviderDeadline.js";
 
 const INSTALL = "/opt/ghidra_12.1.4_PUBLIC";
+afterEach(() => vi.restoreAllMocks());
 const installationHost = (): GhidraInstallationHost => ({
   platform: "linux",
   architecture: "x64",
@@ -354,21 +354,30 @@ describe("Ghidra platform support", () => {
       availabilityCode: "unsupported_host",
     });
   });
+});
 
-  it("keeps Windows P0 unavailable until native isolation authority exists", () => {
-    const native = vi
-      .spyOn(WindowsNativeLoader, "systemWindowsNativeAuthority")
-      .mockReturnValue({
-        available: false,
-        reason: WINDOWS_NATIVE_AUTHORITY_UNAVAILABLE_REASON,
-      });
-    onTestFinished(() => native.mockRestore());
-    const ghidra = provider({ ...installationHost(), platform: "win32" });
-    const nativeApplication = peTarget("x86_64");
+describe("Windows Ghidra native failure diagnostics", () => {
+  it.each([
+    ["artifact", "runtime_missing"],
+    ["self-test", "runtime_unavailable"],
+    ["inspection", "runtime_unavailable"],
+  ] as const)(
+    "keeps Windows P0 unavailable after a %s failure",
+    async (failureStage, code) => {
+      const load = vi
+        .spyOn(nativeLoader, "systemWindowsNativeAuthority")
+        .mockReturnValue({
+          available: false,
+          failureStage,
+          reason: "Windows native controls are unavailable: missing manifest",
+        });
+      const ghidra = provider({ ...installationHost(), platform: "win32" });
+      const nativeApplication = peTarget("x86_64");
 
-    for (const architecture of ["x86", "x86_64"] as const)
-      expect(ghidra.inspectTargetSupport(peTarget(architecture))).toMatchObject(
-        {
+      for (const architecture of ["x86", "x86_64"] as const)
+        expect(
+          ghidra.inspectTargetSupport(peTarget(architecture)),
+        ).toMatchObject({
           status: "supported",
           diagnostics: {
             host_platform: "win32",
@@ -376,76 +385,94 @@ describe("Ghidra platform support", () => {
             executable_role: "application",
             managed: false,
           },
+        });
+      expect(ghidra.inspectAvailability()).toMatchObject({
+        status: "unavailable",
+        code,
+        reason: expect.stringContaining(
+          "Windows native controls are unavailable",
+        ),
+        diagnostics: {
+          windows_native_failure: {
+            stage: failureStage,
+            remediation: expect.any(String),
+          },
+          windows_security: {
+            job_object_process_ownership: expect.objectContaining({
+              available: false,
+              proof: "not-proven",
+            }),
+            private_runtime_dacl: expect.objectContaining({
+              available: false,
+              proof: "not-proven",
+            }),
+            reparse_safe_path_admission: expect.objectContaining({
+              available: false,
+              proof: "not-proven",
+            }),
+          },
         },
+      });
+      expect(load).toHaveBeenCalledTimes(1);
+      expect(ghidra.capabilities()).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            operation: "list_procedures",
+            available: false,
+            availabilityCode: code,
+            limitations: expect.arrayContaining([
+              expect.stringContaining(
+                "matching packaged Windows x64 native addon",
+              ),
+              expect.stringContaining(
+                "private DACLs, and Job Object ownership automatically",
+              ),
+            ]),
+          }),
+        ]),
       );
-    expect(ghidra.inspectAvailability()).toMatchObject({
-      status: "unavailable",
-      code: "unsupported_host",
-      reason: expect.stringContaining(
-        "Windows native controls are unavailable",
-      ),
-      diagnostics: {
-        windows_security: {
-          job_object_process_ownership: expect.objectContaining({
-            available: false,
-            proof: "not-proven",
-          }),
-          private_runtime_dacl: expect.objectContaining({
-            available: false,
-            proof: "not-proven",
-          }),
-          reparse_safe_path_admission: expect.objectContaining({
-            available: false,
-            proof: "not-proven",
-          }),
-        },
-      },
-    });
-    expect(ghidra.capabilities()).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          operation: "list_procedures",
-          available: false,
-          availabilityCode: "unsupported_host",
-          limitations: expect.arrayContaining([
-            expect.stringContaining(
-              "matching packaged Windows x64 native addon",
-            ),
-            expect.stringContaining(
-              "private DACLs, and Job Object ownership automatically",
-            ),
-          ]),
+      expect(
+        ghidra.inspectTargetSupport({
+          ...nativeApplication,
+          executableRole: "non-executable",
         }),
-      ]),
-    );
-    expect(
-      ghidra.inspectTargetSupport({
-        ...nativeApplication,
-        executableRole: "non-executable",
-      }),
-    ).toMatchObject({
-      status: "unsupported",
-      code: "target_role_unsupported",
-    });
-    expect(
-      ghidra.inspectTargetSupport({ ...nativeApplication, managed: true }),
-    ).toMatchObject({
-      status: "unsupported",
-      code: "managed_target_unsupported",
-    });
-    expect(
-      ghidra.inspectTargetSupport(executableTarget("elf", "x86_64")),
-    ).toMatchObject({
-      status: "unsupported",
-      code: "target_format_unsupported",
-    });
-    expect(
-      ghidra.inspectTargetSupport(executableTarget("pe", "arm64")),
-    ).toMatchObject({
-      status: "unsupported",
-      code: "architecture_unsupported",
-    });
-  });
+      ).toMatchObject({
+        status: "unsupported",
+        code: "target_role_unsupported",
+      });
+      expect(
+        ghidra.inspectTargetSupport({ ...nativeApplication, managed: true }),
+      ).toMatchObject({
+        status: "unsupported",
+        code: "managed_target_unsupported",
+      });
+      expect(
+        ghidra.inspectTargetSupport(executableTarget("elf", "x86_64")),
+      ).toMatchObject({
+        status: "unsupported",
+        code: "target_format_unsupported",
+      });
+      expect(
+        ghidra.inspectTargetSupport(executableTarget("pe", "arm64")),
+      ).toMatchObject({
+        status: "unsupported",
+        code: "architecture_unsupported",
+      });
+      const client = ghidra.createClient(nativeApplication);
+      const health = await client.execute("health", {});
+      if (health.ok)
+        throw new Error(
+          "Failed native admission must not create a ready client",
+        );
+      expect(projectAnalysisError(health.error)).toMatchObject({
+        code: "capability_unavailable",
+        details: {
+          reason: "Windows native controls are unavailable: missing manifest",
+        },
+      });
+      expect(load).toHaveBeenCalledTimes(3);
+    },
+  );
 });
 
 describe("Ghidra Windows PE fixture admission", () => {
