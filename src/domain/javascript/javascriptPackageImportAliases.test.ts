@@ -34,10 +34,11 @@ describe("package import specifier classification", () => {
   );
 
   it.each(["#internal/*", "#*"])(
-    "leaves pattern specifier %j unresolved",
+    "keeps the literal star in request %j",
     (specifier) => {
       expect(classifyPackageImportSpecifier(specifier)).toEqual({
-        kind: "pattern",
+        kind: "exact",
+        key: specifier,
       });
     },
   );
@@ -66,9 +67,29 @@ describe("exact package import lookup", () => {
     });
   });
 
-  it("does not claim a miss when the map only has pattern keys", () => {
+  it("matches a pattern key and captures the enclosed substring", () => {
     expect(
       lookupExactPackageImport({ "#internal/*": "./src/*.js" }, "#internal/a"),
+    ).toEqual({
+      kind: "pattern-found",
+      target: "./src/*.js",
+      capture: "a",
+      declared: ["#internal/*"],
+    });
+  });
+
+  it("matches a pattern key that lacks the hash prefix, like Node", () => {
+    expect(lookupExactPackageImport({ "*": "./src/*.js" }, "#foo")).toEqual({
+      kind: "pattern-found",
+      target: "./src/*.js",
+      capture: "#foo",
+      declared: ["*"],
+    });
+  });
+
+  it("does not claim a miss when no pattern key matches", () => {
+    expect(
+      lookupExactPackageImport({ "#internal/*": "./src/*.js" }, "#other/a"),
     ).toEqual({
       kind: "pattern-unresolved",
       declared: ["#internal/*"],
@@ -97,11 +118,13 @@ describe("exact package import lookup", () => {
     },
   );
 
-  it("does not treat a pattern key as an exact match for itself", () => {
+  it("matches a literal star request by pattern capture rather than exact lookup", () => {
     expect(
       lookupExactPackageImport({ "#internal/*": "./src/*.js" }, "#internal/*"),
     ).toEqual({
-      kind: "pattern-unresolved",
+      kind: "pattern-found",
+      target: "./src/*.js",
+      capture: "*",
       declared: ["#internal/*"],
     });
   });

@@ -580,8 +580,12 @@ scope, stopping at a `node_modules` directory so a nested package cannot inherit
 an ancestor's aliases. Selected targets are package-local `./` files with no
 extension or index fallback, using the same condition, array, and null selection
 as exports subpaths. A missing key, explicit null, or out-of-scope alias keeps
-an unresolved edge with that reason. Wildcard keys (`#internal/*`), recursive
-`#` targets, and external-package import targets remain unresolved.
+an unresolved edge with that reason. Single-`*` pattern keys such as
+`#internal/*` resolve concrete specifiers the same way as exports pattern
+keys: exact keys win, the longest matching prefix orders pattern keys, and the
+declared target and capture are validated separately before substitution into the normalized target URL, with forbidden segments
+refused. Recursive `#` targets and external-package import targets remain
+unresolved.
 
 Exact keys such as `#/x` are literal lookup identities. `#` and names ending
 in `/` are invalid. Imports arrays skip invalid parent-relative, absolute, and

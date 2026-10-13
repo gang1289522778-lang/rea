@@ -19,6 +19,7 @@ import {
   classifyPackageImportTargetString,
   lookupExactPackageImport,
 } from "../../domain/javascript/javascriptPackageImportAliases.js";
+import { matchPackagePatternKey } from "../../domain/javascript/javascriptPackagePatternKeys.js";
 import {
   typescriptEmittedSourceCandidates,
   type TypeScriptEmittedSourceCandidate,
@@ -107,7 +108,9 @@ const packageMetadataUrl = (path: string): URL =>
   );
 
 interface PackageFileTarget {
+  /** Exact source metadata text; expansion must not replace this evidence. */
   readonly value: string;
+  readonly expanded_value?: string;
   /** Normalized URL retained until loader-specific validation and file lookup. */
   readonly url: URL;
 }
@@ -516,9 +519,12 @@ const enclosingPackageMetadata = (
 };
 
 /**
- * Resolve an exact `#alias` against the importer's enclosing `imports` map.
- * Selected relative targets are exact files; patterns, recursive aliases, and
- * external-package targets stay unresolved without falling through.
+ * Resolve an exact or pattern `#alias` against the importer's enclosing
+ * `imports` map. Exact keys win; single-`*` pattern keys capture their
+ * enclosed substring for substitution into the selected normalized URL, as in
+ * exports patterns. Selected targets are package-local `./` files with no
+ * extension or index fallback; recursive aliases and external-package targets
+ * stay unresolved without falling through.
  */
 const resolvePackageImportAlias = (
   input: ResolveArtifactPathInput,
@@ -528,10 +534,6 @@ const resolvePackageImportAlias = (
   if (classified.kind === "invalid")
     return unresolvedCandidate("rejected", [
       `The package import specifier ${JSON.stringify(specifier)} is invalid; "#" and specifiers that end with "/" are not valid import aliases.`,
-    ]);
-  if (classified.kind === "pattern")
-    return unresolvedCandidate("external", [
-      `Wildcard and directory package import aliases remain unresolved; ${JSON.stringify(specifier)} is not an exact imports key.`,
     ]);
   const metadata = enclosingPackageMetadata(input);
   if (metadata.kind === "none")
@@ -551,12 +553,13 @@ const resolvePackageImportAlias = (
     ]);
   if (lookup.kind === "pattern-unresolved")
     return unresolvedCandidate("external", [
-      `Wildcard package import aliases remain unresolved; package metadata ${metadata.path} has no exact imports key ${specifier}.`,
+      `Package metadata ${metadata.path} declares no exact or matching pattern imports key ${specifier}; it declares ${lookup.declared.join(", ") || "no imports keys"}.`,
     ]);
+  const packageUrl = packageMetadataUrl(metadata.path);
   const selected = selectExportTarget(
     lookup.target,
     packageExportConditions(input.moduleKind),
-    packageMetadataUrl(metadata.path),
+    packageUrl,
     "imports",
   );
   if (selected.kind === "invalid" || selected.kind === "invalid-config")
@@ -571,15 +574,32 @@ const resolvePackageImportAlias = (
     return unresolvedCandidate("external", [
       `Package metadata ${metadata.path} blocks import alias ${specifier} with ${selected.cause === "null" ? "an explicit null imports target" : "an empty imports target array"}.`,
     ]);
-  if (selected.kind === "non-relative") {
-    const target = classifyPackageImportTargetString(selected.value);
+  // Pattern matches substitute the captured substring into the selected target
+  // string, but a selected non-relative target keeps its class: Node
+  // classifies the declared target before substitution, and reclassifying the
+  // expanded text could launder a bare-package target into a relative one.
+  const final =
+    lookup.kind !== "pattern-found"
+      ? selected
+      : selected.kind === "non-relative"
+        ? ({
+            kind: "non-relative",
+            value: selected.value.replaceAll("*", () => lookup.capture),
+          } as const)
+        : expandPatternString(selected, lookup.capture, "imports");
+  if (final.kind === "invalid")
+    return unresolvedCandidate("rejected", [
+      `Package metadata ${metadata.path}: ${final.limitation}`,
+    ]);
+  if (final.kind === "non-relative") {
+    const target = classifyPackageImportTargetString(final.value);
     return unresolvedCandidate("external", [
       target.kind === "recursive"
-        ? `Recursive package import aliases remain unresolved; package metadata ${metadata.path} maps ${specifier} to ${JSON.stringify(target.target)}.`
-        : `External-package import targets remain unresolved; package metadata ${metadata.path} maps ${specifier} to ${JSON.stringify(target.target)}.`,
+        ? `Recursive package import aliases remain unresolved; package metadata ${metadata.path} maps ${specifier} to ${JSON.stringify(target.target)} (declared target ${JSON.stringify(selected.value)}).`
+        : `External-package import targets remain unresolved; package metadata ${metadata.path} maps ${specifier} to ${JSON.stringify(target.target)} (declared target ${JSON.stringify(selected.value)}).`,
     ]);
   }
-  return resolveExportTarget(input, metadata.path, selected, "imports");
+  return resolveExportTarget(input, metadata.path, final, "imports");
 };
 
 /** Self references use the nearest package scope before dependency lookup. */
@@ -710,9 +730,22 @@ const resolveExportTarget = (
     ...outcome,
     limitations: outcome.limitations.map(
       (reason) =>
-        `Package metadata ${packagePath}, ${mapKind} target ${JSON.stringify(target.value)}: ${reason}`,
+        `Package metadata ${packagePath}, ${mapKind} target ${JSON.stringify(target.value)}${target.expanded_value === undefined ? "" : `, expanded as ${JSON.stringify(target.expanded_value)}`}: ${reason}`,
     ),
   });
+  // Pattern substitution can assemble an encoded parent segment that URL
+  // normalization removes. Confine the final URL, after all substitutions,
+  // to the owning package rather than only to the enclosing artifact.
+  const packageDirectory = new URL(".", packageMetadataUrl(packagePath));
+  if (
+    target.url.origin !== packageDirectory.origin ||
+    !target.url.pathname.startsWith(packageDirectory.pathname)
+  )
+    return withTargetSource(
+      unresolvedCandidate("rejected", [
+        "The selected package URL escapes its package directory.",
+      ]),
+    );
   // Node's CommonJS finalizer checks the serialized URL, including suffixes;
   // its ESM finalizer checks only the pathname. Neither error retries arrays.
   if (input.moduleKind === "require" && /%(?:2f|5c)/iu.test(target.url.href))
@@ -1096,7 +1129,12 @@ type PackageExportOutcome =
   | { readonly status: "blocked"; readonly cause: PackageTargetBlockCause }
   | { readonly status: "unmatched"; readonly declared: readonly string[] };
 
-/** Only exact non-directory keys participate; wildcard expansion is unsupported. */
+/**
+ * Exact keys win over pattern keys. Without an exact hit, keys containing
+ * exactly one `*` are tried in Node's pattern-key order and a match captures
+ * its enclosed substring for substitution into the selected normalized URL.
+ * The declared target and capture are admitted separately before expansion.
+ */
 const selectPackageExport = (
   value: unknown,
   subpath: string,
@@ -1105,6 +1143,7 @@ const selectPackageExport = (
 ): PackageExportOutcome => {
   let target = value;
   let declared: string[] = [];
+  let capture: string | null = null;
   if (typeof value === "object" && value !== null && !Array.isArray(value)) {
     const keys = Object.keys(value);
     const hasSubpaths = keys.some((key) => key.startsWith("."));
@@ -1117,18 +1156,24 @@ const selectPackageExport = (
     declared = keys;
     if (hasSubpaths) {
       if (
-        subpath.endsWith("/") ||
-        subpath.includes("*") ||
-        !Object.hasOwn(value, subpath)
-      )
-        return { status: "unmatched", declared };
-      target = Reflect.get(value, subpath);
+        !subpath.includes("*") &&
+        !subpath.endsWith("/") &&
+        Object.hasOwn(value, subpath)
+      ) {
+        target = Reflect.get(value, subpath);
+      } else {
+        const pattern = matchPackagePatternKey(keys, subpath);
+        if (pattern === null) return { status: "unmatched", declared };
+        target = Reflect.get(value, pattern.key);
+        capture = pattern.capture;
+      }
     } else if (subpath !== ".") return { status: "unmatched", declared };
   } else if (subpath !== ".") return { status: "unmatched", declared };
+  const packageUrl = packageMetadataUrl(packagePath);
   const selected = selectExportTarget(
     target,
     packageExportConditions(moduleKind),
-    packageMetadataUrl(packagePath),
+    packageUrl,
   );
   if (selected.kind === "invalid" || selected.kind === "invalid-config")
     return { status: "rejected", limitation: selected.limitation };
@@ -1144,11 +1189,21 @@ const selectPackageExport = (
       status: "rejected",
       limitation: `The package exports target ${JSON.stringify(selected.value)} must start with "./".`,
     };
-  return {
-    status: "value",
-    value: selected.value,
-    url: selected.url,
-  };
+  if (capture === null)
+    return {
+      status: "value",
+      value: selected.value,
+      url: selected.url,
+    };
+  const expanded = expandPatternString(selected, capture, "exports");
+  if (expanded.kind === "value")
+    return {
+      status: "value",
+      value: expanded.value,
+      expanded_value: expanded.expanded_value,
+      url: expanded.url,
+    };
+  return { status: "rejected", limitation: expanded.limitation };
 };
 
 type ExportTargetOutcome =
@@ -1170,20 +1225,28 @@ const invalidExportTarget = (
 
 // Node checks raw target segments before URL normalization. Compare encoded
 // segment names here; full URL decoding follows array target selection.
+const decodedSegmentIsForbidden = (raw: string): boolean => {
+  const segment = raw.replace(/%[0-9a-f]{2}/giu, (encoded) =>
+    String.fromCharCode(Number.parseInt(encoded.slice(1), 16)),
+  );
+  return (
+    segment === "." ||
+    segment === ".." ||
+    segment.toLowerCase() === "node_modules"
+  );
+};
+
 const forbiddenExportSegment = (value: string): string | undefined =>
   value
     .slice(2)
     .split(/[\\/]/u)
-    .find((raw) => {
-      const segment = raw.replace(/%[0-9a-f]{2}/giu, (encoded) =>
-        String.fromCharCode(Number.parseInt(encoded.slice(1), 16)),
-      );
-      return (
-        segment === "." ||
-        segment === ".." ||
-        segment.toLowerCase() === "node_modules"
-      );
-    });
+    .find((raw) => decodedSegmentIsForbidden(raw));
+
+// Node rejects a forbidden segment in the captured subpath itself, whether or
+// not the selected target interpolates the `*`. Backslash separates capture
+// segments the same way it separates target segments.
+const forbiddenCapturedSegment = (capture: string): string | undefined =>
+  capture.split(/[\\/]/u).find((raw) => decodedSegmentIsForbidden(raw));
 
 const selectStringPackageTarget = (
   value: string,
@@ -1222,6 +1285,38 @@ const selectStringPackageTarget = (
     kind: "value",
     value,
     url,
+  };
+};
+
+/**
+ * Substitute a capture into the already-normalized selected URL. The declared
+ * target and capture each own their segment validation; concatenating them
+ * must not trigger another segment check. Node rejects a
+ * forbidden captured segment even when the target never interpolates it, and
+ * the replacer function keeps `$` sequences in the capture literal instead
+ * of interpreting them as replacement patterns.
+ */
+const expandPatternString = (
+  selected: Extract<ExportTargetOutcome, { readonly kind: "value" }>,
+  capture: string,
+  mapKind: "exports" | "imports",
+):
+  | ({
+      readonly kind: "value";
+      readonly expanded_value: string;
+    } & PackageFileTarget)
+  | { readonly kind: "invalid"; readonly limitation: string } => {
+  const forbidden = forbiddenCapturedSegment(capture);
+  if (forbidden !== undefined)
+    return {
+      kind: "invalid",
+      limitation: `The package ${mapKind === "imports" ? "import" : "exports"} pattern capture ${JSON.stringify(capture)} for declared target ${JSON.stringify(selected.value)} contains forbidden path segment ${JSON.stringify(forbidden)} before URL normalization.`,
+    };
+  return {
+    kind: "value",
+    value: selected.value,
+    expanded_value: selected.value.replaceAll("*", () => capture),
+    url: new URL(selected.url.href.replaceAll("*", () => capture)),
   };
 };
 
