@@ -259,6 +259,14 @@ redirected, which keeps large results smaller for agents and scripts; pipe
 through `jq .` for indented files. Output selection and formatting do not change
 operation status.
 
+With `--full-output`, a successful operation returns
+`{ "ok": true, "data": ..., "meta": ... }`; a failed operation returns
+`{ "ok": false, "error": ..., "meta": ... }` and exits `1`. The error payload
+preserves the command's diagnostics and recovery details. Earlier versions put
+these failures under `data` with `ok: true`; consumers of full output should read
+`error` when `ok` is false. Output filters select fields within successful payloads; full failure envelopes
+retain their canonical diagnostics and do not change `ok`. Without `--full-output`, the existing bare payload is retained.
+
 | Status    | Meaning                                                                                                                                              |
 | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `0`       | The operation completed. Its result may include partial evidence, warnings or unresolved questions.                                                  |

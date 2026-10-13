@@ -3,6 +3,12 @@ import { join } from "node:path";
 
 import { createPackageWithOptions } from "@electron/asar";
 import { describe, expect, it } from "vitest";
+import { parse as parseYaml } from "yaml";
+
+import {
+  analysisCliErrorEnvelopeSchema,
+  analysisErrorProjectionSchema,
+} from "../../../src/contracts/errorSchemas.js";
 
 import { workspaceCliTest } from "../../support/cli/workspaceCliFixture.js";
 
@@ -264,6 +270,144 @@ describe("CLI output argument boundary", () => {
       renderEmptyFilteredCliOutput(["providers", "--format", "json"]),
     ).toBeUndefined();
   });
+});
+
+describe("compiled CLI failure envelopes", () => {
+  workspaceCliTest(
+    "uses command-owned failure decisions for doctor and setup full output",
+    async ({ cli, workspace }) => {
+      for (const scenario of [
+        {
+          arguments: ["doctor", "--provider", "ghidra"],
+          error: { healthy: false },
+        },
+        {
+          arguments: ["setup", "--client", "cursor"],
+          error: { status: "needs_confirmation" },
+        },
+      ]) {
+        const result = await cli.run({
+          arguments: [...scenario.arguments, "--json", "--full-output"],
+          environment: {
+            HOME: workspace.root,
+            USERPROFILE: workspace.root,
+            XDG_CONFIG_HOME: workspace.root,
+            REA_GHIDRA_PATH: workspace.path("missing-ghidra"),
+          },
+        });
+        expect(result.exitCode).toBe(1);
+        expect(result.json).toMatchObject({
+          ok: false,
+          error: scenario.error,
+          meta: { command: scenario.arguments[0] },
+        });
+        expect(result.json).not.toHaveProperty("data");
+      }
+    },
+    CLI_INTEGRATION_TIMEOUT_MS,
+  );
+
+  workspaceCliTest(
+    "preserves canonical failures when output filters select success payload fields",
+    async ({ cli, workspace }) => {
+      for (const field of ["code", "missing"]) {
+        const result = await cli.run({
+          arguments: [
+            "inspect-managed-artifact",
+            workspace.path("missing.dll"),
+            "--json",
+            "--full-output",
+            "--filter-output",
+            field,
+          ],
+        });
+        expect(result.exitCode).toBe(1);
+        expect(result.json).toMatchObject({
+          ok: false,
+          error: { code: "target_unavailable", category: "unavailable" },
+          meta: {
+            command: "inspect-managed-artifact",
+            duration: expect.any(String),
+          },
+        });
+      }
+    },
+    CLI_INTEGRATION_TIMEOUT_MS,
+  );
+
+  workspaceCliTest(
+    "retains failure status and pagination metadata in text token windows",
+    async ({ cli, workspace }) => {
+      for (const format of ["toon", "md"]) {
+        const result = await cli.run({
+          arguments: [
+            "inspect-managed-artifact",
+            workspace.path("missing.dll"),
+            "--format",
+            format,
+            "--full-output",
+            "--token-limit",
+            "10",
+          ],
+        });
+        expect(result.exitCode).toBe(1);
+        expect(result.stdout).toContain(
+          format === "toon" ? "ok: false" : "## ok\n\nfalse",
+        );
+        expect(result.stdout).toContain("[truncated: showing tokens 0–10 of ");
+        expect(result.stdout).toContain("nextOffset");
+        expect(result.stdout).not.toContain(
+          format === "toon" ? "\ndata:" : "## data",
+        );
+      }
+    },
+    CLI_INTEGRATION_TIMEOUT_MS,
+  );
+
+  for (const format of ["json", "jsonl", "yaml"] as const) {
+    workspaceCliTest(
+      `reports failed operations in the ${format} full-output envelope without losing details`,
+      async ({ cli, workspace }) => {
+        const path = workspace.path("missing.dll");
+        for (const arguments_ of [
+          ["inspect-managed-artifact", path],
+          ["capture-electron-scenario", "{"],
+        ]) {
+          const bare = await cli.run({
+            arguments: [...arguments_, "--format", format],
+          });
+          const full = await cli.run({
+            arguments: [...arguments_, "--format", format, "--full-output"],
+          });
+          const bareValue: unknown = parseYaml(bare.stdout);
+          const fullValue: unknown = parseYaml(full.stdout);
+          expect(bare.exitCode).toBe(1);
+          expect(full.exitCode).toBe(1);
+          expect(bareValue).toMatchObject({
+            code: expect.any(String),
+            category: expect.any(String),
+            message: expect.any(String),
+            remediation: expect.any(Object),
+          });
+          const {
+            error: _label,
+            input_path: _inputPath,
+            input_reason: _inputReason,
+            ...projection
+          } = analysisCliErrorEnvelopeSchema.parse(bareValue);
+          expect(fullValue).toEqual({
+            ok: false,
+            error: analysisErrorProjectionSchema.parse(projection),
+            meta: {
+              command: arguments_[0],
+              duration: expect.any(String),
+            },
+          });
+        }
+      },
+      CLI_INTEGRATION_TIMEOUT_MS,
+    );
+  }
 });
 
 describe("compiled CLI output boundary", () => {
