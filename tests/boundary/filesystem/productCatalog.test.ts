@@ -9,6 +9,7 @@ import { createTestTempDirectory } from "../../fixtures/temporaryDirectory.js";
 import { SUPPORTED_CLIENT_DEFINITIONS } from "../../../src/application/SupportedClients.js";
 import { CLI_COMMAND_NAMES } from "../../../src/cliCommandNames.js";
 import { createCli } from "../../../src/cli.js";
+import { FRIDA_TOOL_CONTRACTS } from "../../../src/contracts/fridaToolContracts.js";
 import { FRIDA_PROVIDER_IDENTITY } from "../../../src/frida/FridaInstrumentationManager.js";
 import { TOOL_CONTRACTS } from "../../../src/contracts/toolContracts.js";
 import {
@@ -82,11 +83,7 @@ describe("canonical product catalog", () => {
     expect(
       catalog.providers.find(({ id }) => id === FRIDA_PROVIDER_IDENTITY.id)
         ?.capabilities,
-    ).toEqual(
-      TOOL_CONTRACTS.filter(({ name }) => name.includes("frida"))
-        .map(({ name }) => name)
-        .sort(),
-    );
+    ).toEqual(FRIDA_TOOL_CONTRACTS.map(({ name }) => name).sort());
     expect(
       JSON.parse(await readFile("docs/public/product-catalog.json", "utf8")),
     ).toEqual(catalog);

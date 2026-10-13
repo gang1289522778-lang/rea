@@ -29,6 +29,7 @@ export const TOOL_KINDS = [
   "flutter-provider",
   "jeb-provider",
   "adb-provider",
+  "ios-provider",
   "firmware-provider",
   "browser-provider",
   "electron-provider",

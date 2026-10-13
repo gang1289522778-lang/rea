@@ -161,6 +161,8 @@ Alat tambahan dan dukungan sistem host bergantung pada target yang dianalisis:
 
 Pemeriksaan JavaScript dan .NET statis membaca berkas yang disediakan tanpa menjalankan aplikasinya. Perekaman runtime menjalankan atau berinteraksi dengan target yang dipilih menggunakan izin pengguna Anda. Setiap panduan runtime menjelaskan dampaknya.
 
+For jailbroken iOS runtime analysis, see [the iOS device guide](docs/ios-device-analysis.md).
+
 <a id="choosing-a-deep-analysis-provider"></a>
 
 Format native dan dukungan sistem host berbeda-beda menurut penyedia. Lihat [penyiapan Hopper dan Ghidra](docs/installation.md#hopper), [panduan IDA](docs/ida-provider.md), dan [dukungan eksperimental Ghidra di Windows](docs/windows-ghidra-p0.md).

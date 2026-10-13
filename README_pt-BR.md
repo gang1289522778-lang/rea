@@ -154,6 +154,8 @@ O REA requer Node.js 22.x (>=22.19), 24.x (>=24.11) ou 26+, além do npm. As fer
 
 A inspeção estática de JavaScript e .NET lê os arquivos fornecidos sem executar o aplicativo. A captura em execução inicia o alvo selecionado ou interage com ele usando as permissões do seu usuário; cada guia descreve seus efeitos.
 
+For jailbroken iOS runtime analysis, see [the iOS device guide](docs/ios-device-analysis.md).
+
 <a id="choosing-a-deep-analysis-provider"></a>
 
 Os formatos nativos e os sistemas anfitriões compatíveis variam por provedor. Consulte [configuração do Hopper e Ghidra](docs/installation.md#hopper), o [guia do IDA](docs/ida-provider.md) e o [suporte experimental ao Ghidra no Windows](docs/windows-ghidra-p0.md). O Ghidra também oferece [análise de DOS de 16 bits](docs/ghidra-dos.md). Para selecionar um provedor, consulte o [guia da CLI](docs/cli.md#choose-a-provider). Verifique a [disponibilidade nas versões](docs/installation.md#released-package-and-main) das funcionalidades adicionadas após a versão mais recente no npm.

@@ -75,6 +75,8 @@ const SOURCE_PATHS = {
   jebProvider: "dist/jeb/JebProvider.js",
   adbContracts: "dist/contracts/adb/adbToolContracts.js",
   adbProvider: "dist/adb/AdbProvider.js",
+  iosContracts: "dist/contracts/ios/iosToolContracts.js",
+  iosProvider: "dist/ios/IosProvider.js",
   managedWorkflowContracts:
     "dist/contracts/managed/managedWorkflowToolContracts.js",
   browserContracts: "dist/contracts/browserToolContracts.js",

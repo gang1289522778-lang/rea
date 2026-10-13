@@ -154,6 +154,8 @@ REA에는 Node.js 22.x(>=22.19), 24.x(>=24.11) 또는 26+와 npm이 필요합니
 
 정적 JavaScript 및 .NET 검사는 제공된 파일을 읽으며 애플리케이션을 실행하지 않습니다. 런타임 캡처는 사용자의 권한으로 선택한 대상을 실행하거나 대상과 상호작용합니다. 각 런타임 가이드에서 그 영향을 설명합니다.
 
+For jailbroken iOS runtime analysis, see [the iOS device guide](docs/ios-device-analysis.md).
+
 <a id="choosing-a-deep-analysis-provider"></a>
 
 지원하는 네이티브 형식과 호스트는 제공자마다 다릅니다. [Hopper 및 Ghidra 설정](docs/installation.md#hopper), [IDA 가이드](docs/ida-provider.md), [실험적 Windows Ghidra 지원](docs/windows-ghidra-p0.md)을 참고하세요. Ghidra는 [16비트 DOS 분석](docs/ghidra-dos.md)도 지원합니다. 제공자 선택은 [CLI 가이드](docs/cli.md#choose-a-provider)를 참고하세요. 최신 npm 릴리스 이후 추가된 기능은 [릴리스에서의 사용 가능 여부](docs/installation.md#released-package-and-main)를 확인하세요.

@@ -108,6 +108,10 @@ import { createJebAnalysisProvider } from "../composition/jeb.js";
 import type { AdbDeviceAnalysisPort } from "../application/adb/AdbDeviceAnalysisPort.js";
 import { AdbDeviceAnalysisService } from "../application/adb/AdbDeviceAnalysisService.js";
 import { createAdbDeviceAnalysisProvider } from "../composition/adb.js";
+import { registerIosTools } from "./registerIosTools.js";
+import type { IosDeviceAnalysisPort } from "../application/ios/IosDeviceAnalysisPort.js";
+import { IosDeviceAnalysisService } from "../application/ios/IosDeviceAnalysisService.js";
+import { createIosDeviceAnalysisProvider } from "../composition/ios.js";
 import { registerManagedWorkflowTools } from "./registerManagedWorkflowTools.js";
 import { registerOfficialTools } from "./registerOfficialTools.js";
 import { registerGuidedPrompts } from "./registerPrompts.js";
@@ -154,6 +158,7 @@ export interface CreateServerOptions {
   readonly flutterAnalysis?: FlutterBuildAnalysisPort;
   readonly jebAnalysis?: JebAnalysisPort;
   readonly adbDeviceAnalysis?: AdbDeviceAnalysisPort;
+  readonly iosDeviceAnalysis?: IosDeviceAnalysisPort;
   readonly browserObservation?: BrowserObservationPort;
   readonly browserScenarioCapture?: BrowserScenarioCapturePort;
   readonly electronObservation?: ElectronObservationPort;
@@ -331,6 +336,8 @@ export const createServer = (
   const jeb = options.jebAnalysis ?? createJebAnalysisProvider(environment);
   const adbDevice =
     options.adbDeviceAnalysis ?? createAdbDeviceAnalysisProvider(environment);
+  const iosDevice =
+    options.iosDeviceAnalysis ?? createIosDeviceAnalysisProvider(environment);
   let providerClose: Promise<void> | undefined;
   const closeProviders = (): Promise<void> => {
     providerClose ??= Promise.allSettled([
@@ -342,6 +349,7 @@ export const createServer = (
       apktool.close(),
       jeb.close(),
       adbDevice.close(),
+      iosDevice.close(),
       flutter.close(),
       pcap.close(),
       evmInterface.close(),
@@ -470,6 +478,13 @@ export const createServer = (
     recordEvidence,
     analysisAdmission,
     evidenceById,
+  );
+  registerIosTools(
+    server,
+    new IosDeviceAnalysisService(iosDevice),
+    toolLogger,
+    recordEvidence,
+    analysisAdmission,
   );
   registerApktoolTools(
     server,

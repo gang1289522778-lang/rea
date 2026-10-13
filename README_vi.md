@@ -154,6 +154,8 @@ REA yêu cầu Node.js 22.x (>=22.19), 24.x (>=24.11) hoặc 26+, cùng với np
 
 Kiểm tra tĩnh JavaScript và .NET đọc các tệp được cung cấp mà không chạy ứng dụng. Ghi lại khi chạy sẽ khởi chạy hoặc tương tác với mục tiêu đã chọn bằng quyền người dùng của bạn; từng hướng dẫn mô tả tác động của nó.
 
+For jailbroken iOS runtime analysis, see [the iOS device guide](docs/ios-device-analysis.md).
+
 <a id="choosing-a-deep-analysis-provider"></a>
 
 Định dạng mã máy và nền tảng chạy REA được hỗ trợ khác nhau tùy trình phân tích. Xem [thiết lập Hopper và Ghidra](docs/installation.md#hopper), [hướng dẫn IDA](docs/ida-provider.md) và [hỗ trợ Ghidra thử nghiệm trên Windows](docs/windows-ghidra-p0.md). Ghidra cũng hỗ trợ [phân tích DOS 16 bit](docs/ghidra-dos.md). Để chọn trình phân tích, xem [hướng dẫn CLI](docs/cli.md#choose-a-provider). Kiểm tra [khả năng sử dụng theo bản phát hành](docs/installation.md#released-package-and-main) đối với tính năng được bổ sung sau phiên bản npm mới nhất.

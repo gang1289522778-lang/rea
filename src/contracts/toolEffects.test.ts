@@ -76,6 +76,9 @@ const EXECUTION_WORDING_EXCEPTIONS: Readonly<Record<string, string>> = {
   inspect_adb_package: "reports install times without changing the device",
   list_adb_processes: "lists running processes without changing the device",
   inspect_web_event_listeners: "states it does not evaluate JavaScript",
+  inspect_ios_toolchain: "only inspects selected executables",
+  list_ios_processes:
+    "lists already-running processes without changing the device",
 };
 
 const declaresForeignAuthority = (name: string): boolean => {
@@ -121,16 +124,21 @@ describe("tool effects", () => {
       ({ effects }) => effects.executesForeignCode || effects.mutatesDevice,
     );
     expect(destructive.map(({ name }) => name).sort()).toEqual([
+      "attach_ios_debugserver",
       "capture_browser_scenario",
       "capture_electron_scenario",
       "capture_native_ui_scenario",
       "capture_process_scenario",
+      "dump_ios_process_memory",
       "install_adb_package",
       "instrument_with_frida",
       "load_frida_script",
       "observe_native_calls",
       "push_adb_file",
       "resume_frida_session",
+      "run_ios_command",
+      "run_ios_frida_script",
+      "run_ios_lldb_command",
       "start_adb_activity",
       "start_adb_app",
       "stop_adb_app",

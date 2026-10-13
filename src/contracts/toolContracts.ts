@@ -16,6 +16,7 @@ import { PCAP_TOOL_CONTRACTS } from "./pcap/pcapToolContracts.js";
 import { FLUTTER_TOOL_CONTRACTS } from "./flutter/flutterToolContracts.js";
 import { JEB_TOOL_CONTRACTS } from "./jeb/jebToolContracts.js";
 import { ADB_TOOL_CONTRACTS } from "./adb/adbToolContracts.js";
+import { IOS_TOOL_CONTRACTS } from "./ios/iosToolContracts.js";
 import { MANAGED_WORKFLOW_TOOL_CONTRACTS } from "./managed/managedWorkflowToolContracts.js";
 import { BROWSER_PROVIDER_TOOL_CONTRACTS } from "./browserProviderToolContracts.js";
 import { ELECTRON_TOOL_CONTRACTS } from "./javascript/electronToolContracts.js";
@@ -51,6 +52,7 @@ export const TOOL_CONTRACTS = [
   ...FLUTTER_TOOL_CONTRACTS,
   ...JEB_TOOL_CONTRACTS,
   ...ADB_TOOL_CONTRACTS,
+  ...IOS_TOOL_CONTRACTS,
   ...FIRMWARE_TOOL_CONTRACTS,
   ...MANAGED_WORKFLOW_TOOL_CONTRACTS,
   ...BROWSER_PROVIDER_TOOL_CONTRACTS,

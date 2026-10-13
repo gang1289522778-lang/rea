@@ -154,6 +154,8 @@ REA 需要 Node.js 22.x（>=22.19）、24.x（>=24.11）或 26+，以及 npm。�
 
 静态 JavaScript 和 .NET 检查读取提供的文件，不运行应用。运行时捕获会以你的用户权限运行目标或与之交互；各运行时指南说明了具体影响。
 
+For jailbroken iOS runtime analysis, see [the iOS device guide](docs/ios-device-analysis.md).
+
 <a id="choosing-a-deep-analysis-provider"></a>
 
 不同提供方支持的原生格式和主机系统有所不同。请参阅 [Hopper 与 Ghidra 设置](docs/installation.md#hopper)、[IDA 指南](docs/ida-provider.md)和[实验性 Windows Ghidra 支持](docs/windows-ghidra-p0.md)。Ghidra 也支持 [16 位 DOS 分析](docs/ghidra-dos.md)。提供方选择见 [CLI 指南](docs/cli.md#choose-a-provider)。对于最新 npm 版本发布后新增的功能，请查看[发布可用性](docs/installation.md#released-package-and-main)。

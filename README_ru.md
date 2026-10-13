@@ -154,6 +154,8 @@ REA требует Node.js 22.x (>=22.19), 24.x (>=24.11) или 26+, а так�
 
 Статическое исследование JavaScript и .NET читает предоставленные файлы, не запуская приложение. Захват во время выполнения запускает выбранную цель или взаимодействует с ней с правами вашего пользователя; соответствующие руководства описывают последствия.
 
+For jailbroken iOS runtime analysis, see [the iOS device guide](docs/ios-device-analysis.md).
+
 <a id="choosing-a-deep-analysis-provider"></a>
 
 Нативные форматы и поддерживаемые системы различаются у разных провайдеров. См. [настройку Hopper и Ghidra](docs/installation.md#hopper), [руководство по IDA](docs/ida-provider.md) и [экспериментальную поддержку Ghidra в Windows](docs/windows-ghidra-p0.md). Ghidra также поддерживает [анализ 16-битного DOS](docs/ghidra-dos.md). Выбор провайдера описан в [руководстве по CLI](docs/cli.md#choose-a-provider). Для функций, добавленных после последней версии в npm, проверьте [доступность в релизах](docs/installation.md#released-package-and-main).
