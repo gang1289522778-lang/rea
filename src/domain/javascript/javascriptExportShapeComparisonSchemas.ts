@@ -7,6 +7,12 @@ const evidenceIdSchema = prefixedDigestSchema("ev");
 const graphIdSchema = prefixedDigestSchema("jag");
 const nodeIdSchema = prefixedDigestSchema("jag_node");
 const textSchema = z.string().min(1);
+/**
+ * An exact export name may be empty: `exports[""]` names a real, statically
+ * known export, so the empty string is an exact name rather than the wildcard
+ * `*` that stands for a name this analysis cannot know.
+ */
+const exportNameSchema = z.string();
 const semanticPrimitiveSchema = z.union([
   z.string(),
   z.number().finite(),
@@ -85,9 +91,9 @@ export const compareJavaScriptExportShapesInputSchema = z
     left: evidenceSchema,
     right: evidenceSchema,
     left_module_path: textSchema,
-    left_export_name: textSchema,
+    left_export_name: exportNameSchema,
     right_module_path: textSchema,
-    right_export_name: textSchema,
+    right_export_name: exportNameSchema,
   })
   .superRefine(validateJavaScriptExportShapeIdentities);
 
@@ -170,7 +176,7 @@ export const projectedExportReturnShapesSchema = z
   .strictObject({
     semantic_role: z.literal("export-return-shapes"),
     module_path: textSchema,
-    exported_name: textSchema,
+    exported_name: exportNameSchema,
     callable_id: textSchema,
     callable_kind: z.enum(["function", "class", "method"]),
     static_return_shapes: z.array(projectedReturnShapeSchema),
@@ -198,7 +204,7 @@ export const projectedExportReturnShapesSchema = z
 const exportCandidateSchema = z.strictObject({
   node_id: nodeIdSchema,
   module_path: textSchema,
-  export_name: textSchema,
+  export_name: exportNameSchema,
   matches_requested_module: z.boolean(),
   matches_requested_export: z.boolean(),
 });
@@ -207,7 +213,7 @@ const selectorResultShape = {
   evidence_id: evidenceIdSchema,
   graph_id: graphIdSchema,
   requested_module_path: textSchema,
-  requested_export_name: textSchema,
+  requested_export_name: exportNameSchema,
   candidates: z.array(exportCandidateSchema),
   omitted_candidates: z.number().int().min(0),
 };

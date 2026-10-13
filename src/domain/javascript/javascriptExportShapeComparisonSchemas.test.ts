@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 
 import {
+  compareJavaScriptExportShapesInputSchema,
   javaScriptExportShapeComparisonChangeSchema,
   projectedExportReturnShapesSchema,
 } from "./javascriptExportShapeComparisonSchemas.js";
@@ -62,6 +63,29 @@ it("rejects a comparison change object missing presence", () => {
     javaScriptExportShapeComparisonChangeSchema.safeParse({
       ...change,
       presence: { left: "absent", right: "present" },
+    }).success,
+  ).toBe(true);
+});
+
+it("accepts an exact empty export name in a selector and a projection", () => {
+  // `exports[""]` is a real, statically known export name, so the empty string
+  // is an exact name rather than the wildcard: both the selectors callers send
+  // and the projection this analysis produces have to admit it.
+  for (const field of [
+    compareJavaScriptExportShapesInputSchema.shape.left_export_name,
+    compareJavaScriptExportShapesInputSchema.shape.right_export_name,
+  ])
+    expect(field.safeParse("").success).toBe(true);
+  expect(
+    projectedExportReturnShapesSchema.safeParse({
+      ...projectionWithField({
+        path: "/kind",
+        presence: "present",
+        state: "union",
+        value: ["success", "failure"],
+        reason: null,
+      }),
+      exported_name: "",
     }).success,
   ).toBe(true);
 });

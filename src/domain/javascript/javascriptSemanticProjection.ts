@@ -815,16 +815,18 @@ const commonJsExportName = (
   if (!t.isMemberExpression(node) && !t.isOptionalMemberExpression(node))
     return undefined;
   const key = semanticStaticPropertyKey(node.property, node.computed);
-  // `exports[key]`/`module.exports[key]` assign an export whose name is not
-  // knowable. Report the wildcard rather than the variable name, and never
-  // collapse it into `default`, which would claim a real default export.
+  // `exports[key]`/`module.exports[key]` with a non-literal key assign an export
+  // whose name is not knowable. Report the wildcard rather than the variable
+  // name, and never collapse it into `default`, which would claim a real
+  // default export. The empty string is a legal, exactly known key, so only a
+  // null key is unknowable.
   if (isUnshadowedGlobal(node.object, state, "exports"))
-    return key === null ? "*" : key || "*";
+    return key === null ? "*" : key;
   if (
     t.isMemberExpression(node.object) &&
     isCommonJsModuleExports(node.object, state)
   )
-    return key === null ? "*" : key || "default";
+    return key === null ? "*" : key;
   if (isCommonJsModuleExports(node, state)) return "default";
   return undefined;
 };

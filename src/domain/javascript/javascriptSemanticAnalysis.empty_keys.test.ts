@@ -115,3 +115,20 @@ it("retains exact empty request field names without dynamic fields", () => {
     ),
   ).toEqual(["", "body"]);
 });
+
+it("retains the exact empty CommonJS export name", () => {
+  // "" is a legal, statically known key, so it is not an unknown name and it
+  // must not be reported as a default export.
+  const ir = analyzeJavaScriptSemantics(`
+    exports[''] = 1;
+    module.exports[''] = 2;
+    exports['ok'] = 3;
+    exports[key] = 4;
+  `);
+  expect(ir.moduleLinks.map(({ exportedName }) => exportedName)).toEqual([
+    "",
+    "",
+    "ok",
+    "*",
+  ]);
+});
