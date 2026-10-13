@@ -61,6 +61,10 @@ explicit path or endpoint and do not need it.
   consult the NativeAOT workflow in `references/native-and-artifacts.md` for
   optional metadata recovery and its supported host/layout boundary.
 - User-owned browser page already open: `list_browser_targets`.
+- Browser action the agent must perform (click, type, navigate):
+  `capture_browser_scenario`, not a passive tool plus a separate click. See
+  [runtime observation](references/runtime-observation.md) for connect/launch
+  and the focused follow-up browser tools.
 - Fiddler Everywhere traffic or a native `.saz` capture: read the
   [Fiddler workflow](references/runtime-observation.md#fiddler-everywhere-traffic-debugging).
   Inspect saved SAZ with `inspect_web_network_capture` and `format: "saz"`;
@@ -272,7 +276,8 @@ as complete while required questions remain open.
   [references/javascript-applications.md](references/javascript-applications.md)
 - Android APK declarations, classes, methods, and static references:
   [references/android-applications.md](references/android-applications.md)
-- Passive browser/Electron observation and static/runtime reconciliation:
+- Browser/Electron observation (passive and scenario) and static/runtime
+  reconciliation:
   [references/runtime-observation.md](references/runtime-observation.md)
 - Evidence paging, comparisons, residual unknowns, and verification:
   [references/evidence-workflows.md](references/evidence-workflows.md)
