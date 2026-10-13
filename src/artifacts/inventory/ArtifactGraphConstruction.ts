@@ -1,3 +1,4 @@
+import { RECONSTRUCTED_PYTHON_HEADER_LIMITATION } from "../pyinstaller/PythonBytecode.js";
 import { compareUnicodeCodePoints } from "../../domain/unicodeCodePointOrder.js";
 import { digestCanonicalValue } from "../../domain/canonicalDigest.js";
 import { hasBinaryPlistSignature } from "../../domain/apple/appleArchiveFormat.js";
@@ -227,7 +228,7 @@ export const rootOccurrenceFor = (
   artifact_kind:
     metadata.format === "directory" ||
     isZipPackageFormat(metadata.format) ||
-    ["asar", "dmg", "pkg"].includes(metadata.format)
+    ["asar", "dmg", "pkg", "pyinstaller"].includes(metadata.format)
       ? "container"
       : artifactRoleForFormat(metadata.path, metadata.format).kind,
   artifact_format: metadata.format,
@@ -290,7 +291,11 @@ export const createArtifactEdges = (
       relation:
         occurrence.entry_kind === "slice"
           ? ("slice-of" as const)
-          : relationFor(occurrence.logical_path),
+          : occurrence.limitations.includes(
+                RECONSTRUCTED_PYTHON_HEADER_LIMITATION,
+              )
+            ? ("derived-from" as const)
+            : relationFor(occurrence.logical_path),
       occurrence_id: occurrence.occurrence_id,
     };
     edges.push({

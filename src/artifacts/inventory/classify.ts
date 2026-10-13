@@ -4,6 +4,7 @@ import type { Stats } from "node:fs";
 import type { StableRegularFileDescriptor } from "../../filesystem/RegularFile.js";
 import type { OwnedFileHandle } from "../../filesystem/OwnedFileHandle.js";
 
+import { containsPyInstallerArchive } from "../pyinstaller/CArchiveLayout.js";
 import { classifyArtifactContent } from "./ArtifactGraphConstruction.js";
 import { ARTIFACT_CLASSIFICATION_PREFIX_BYTES } from "../ArtifactHash.js";
 import type { ArtifactOccurrence } from "../../domain/artifactGraph.js";
@@ -156,9 +157,29 @@ const classifyRootFormat = async (
   )
     return "pkg";
   if (lower.endsWith(".dmg") && (await hasKolyTrailer(handle))) return "dmg";
+  const size = (await handle.stat()).size;
+  if (
+    hasNativeExecutablePrefix(prefix) &&
+    (await containsPyInstallerArchive(handle, size))
+  )
+    return "pyinstaller";
   // ASAR is chosen from its header pickle; any other suffix is a role hint.
-  return classifyArtifactContent(path, prefix, (await handle.stat()).size)
-    .format;
+  return classifyArtifactContent(path, prefix, size).format;
+};
+
+const hasNativeExecutablePrefix = (prefix: Buffer): boolean => {
+  if (
+    prefix.length >= 4 &&
+    prefix.subarray(0, 4).equals(Buffer.from([0x7f, 0x45, 0x4c, 0x46]))
+  )
+    return true;
+  if (prefix.length >= 2 && prefix[0] === 0x4d && prefix[1] === 0x5a)
+    return true;
+  if (prefix.length < 4) return false;
+  return [
+    0xfeedface, 0xfeedfacf, 0xcafebabe, 0xcafebabf, 0xcefaedfe, 0xcffaedfe,
+    0xbebafeca, 0xbfbafeca,
+  ].includes(prefix.readUInt32BE(0));
 };
 
 /** App Pack is a verified ZIP root role; nested .app members retain their observed format. */
