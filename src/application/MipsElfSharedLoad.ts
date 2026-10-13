@@ -30,6 +30,7 @@ export const readMipsElfSharedLoad = async (
   const u32 = (bytes: Buffer, offset: number): number =>
     little ? bytes.readUInt32LE(offset) : bytes.readUInt32BE(offset);
   const loads: {
+    index: number;
     offset: number;
     address: number;
     size: number;
@@ -50,7 +51,7 @@ export const readMipsElfSharedLoad = async (
         address + memorySize > 0x100000000
       )
         return err("invalid or incomplete MIPS PT_LOAD range");
-      loads.push({ offset, address, size, memorySize });
+      loads.push({ index: position / 32, offset, address, size, memorySize });
     }
     if (type === 2) {
       if (dynamic !== undefined) return err("duplicate MIPS PT_DYNAMIC tables");
@@ -63,6 +64,26 @@ export const readMipsElfSharedLoad = async (
     return err("invalid MIPS ELF32 dynamic table size");
   if (dynamic.offset > fileSize - dynamic.size)
     return err("MIPS PT_DYNAMIC range extends beyond the file");
+  // Ghidra's ELF image base (ElfHeader.getImageBase): the lowest PT_LOAD
+  // address among the first 20 program headers, else 0. Importing at that
+  // base applies no image shift, so analysis addresses equal link addresses.
+  const linkBase =
+    loads
+      .filter((load) => load.index < 20)
+      .reduce<number | undefined>(
+        (lowest, load) => Math.min(lowest ?? load.address, load.address),
+        undefined,
+      ) ?? 0;
+  // Ghidra prefers an Android prelink trailer (base word, then "PRE") over
+  // PT_LOAD; Java trim() strips code points up to U+0020 from both ends.
+  let prelinkBase: number | null = null;
+  if (fileSize >= 8) {
+    const trailer = await read(fileSize - 8, 8, "MIPS prelink trailer");
+    if (!trailer.ok) return err(trailer.error);
+    const tag = trailer.value.subarray(4).toString("latin1");
+    if (tag.replace(/^[\u0000-\u0020]+|[\u0000-\u0020]+$/gu, "") === "PRE")
+      prelinkBase = u32(trailer.value, 0);
+  }
   const ranges = loads
     .filter((load) => load.memorySize > 0)
     .sort((left, right) => left.address - right.address);
@@ -166,6 +187,8 @@ export const readMipsElfSharedLoad = async (
           relocationCount: 0,
           relocationTypes: [],
           symbolRelativeCount: 0,
+          linkBase,
+          prelinkBase,
         })
       : err(reason);
   };
@@ -216,5 +239,7 @@ export const readMipsElfSharedLoad = async (
     relocationCount: size / 8,
     relocationTypes: [...types].sort((left, right) => left - right),
     symbolRelativeCount,
+    linkBase,
+    prelinkBase,
   });
 };

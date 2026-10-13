@@ -56,6 +56,10 @@ export interface MipsElfMetadata extends ElfFamilyMetadata {
         readonly relocationCount: number;
         readonly relocationTypes: readonly number[];
         readonly symbolRelativeCount: number;
+        /** Ghidra's PT_LOAD image base: lowest PT_LOAD address in the first 20 headers. */
+        readonly linkBase: number;
+        /** Android prelink trailer base, which Ghidra prefers; null when absent. */
+        readonly prelinkBase: number | null;
       }
     | { readonly status: "unavailable"; readonly reason: string };
 }

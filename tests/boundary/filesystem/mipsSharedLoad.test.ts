@@ -82,6 +82,8 @@ for (const little of [true, false]) {
       relocationCount: 2,
       relocationTypes: [0, 3],
       symbolRelativeCount: 0,
+      linkBase: 0,
+      prelinkBase: null,
     });
     assert.equal(ghidraMipsUnsupportedReason(target), null);
     assert.deepEqual(ghidraMipsProfileParameters(target).mips_elf, {
@@ -109,7 +111,43 @@ for (const little of [true, false]) {
       /Symbol-bearing R_MIPS_REL32/u,
     );
   });
+  it(`records a prelink trailer Ghidra would prefer over PT_LOAD (${little ? "LE" : "BE"})`, async () => {
+    const base = Buffer.alloc(4);
+    if (little) base.writeUInt32LE(0x40000000);
+    else base.writeUInt32BE(0x40000000);
+    const target = await resolve(
+      Buffer.concat([fixture(little), base, Buffer.from("PRE\0", "latin1")]),
+    );
+    assert.equal(target.mips.sharedLoad?.status, "complete");
+    if (target.mips.sharedLoad?.status === "complete")
+      assert.equal(target.mips.sharedLoad.prelinkBase, 0x40000000);
+  });
 }
+
+it.each([3, 21])(
+  "selects the lowest nonzero load address among only the first 20 headers (%s headers)",
+  async (count) => {
+    const bytes = fixture(true);
+    const base = 0x800000;
+    bytes.copy(bytes, 1024, 256, 288);
+    bytes.writeUInt16LE(count, 44);
+    bytes.writeUInt32LE(base, 60);
+    bytes.writeUInt32LE(1024, 88);
+    bytes.writeUInt32LE(base + 1024, 92);
+    bytes.writeUInt32LE(base + relOffset, 1028);
+    bytes.writeUInt32LE(base + 512, relOffset + 8);
+    bytes.writeUInt32LE(1, 116);
+    bytes.writeUInt32LE(0x400000, 124);
+    if (count === 21) {
+      bytes.writeUInt32LE(1, 52 + 20 * 32);
+      bytes.writeUInt32LE(0x200000, 52 + 20 * 32 + 8);
+    }
+    const target = await resolve(bytes);
+    assert.equal(target.mips.sharedLoad?.status, "complete");
+    if (target.mips.sharedLoad?.status === "complete")
+      assert.equal(target.mips.sharedLoad.linkBase, 0x400000);
+  },
+);
 
 it("examines relocation records beyond a read chunk before deciding completeness", async () => {
   const count = 8194;
@@ -121,6 +159,8 @@ it("examines relocation records beyond a read chunk before deciding completeness
     relocationCount: count,
     relocationTypes: [0, 3],
     symbolRelativeCount: 1,
+    linkBase: 0,
+    prelinkBase: null,
   });
   assert.match(ghidraMipsUnsupportedReason(target) ?? "", /mode tag/u);
 });
@@ -217,6 +257,8 @@ it("retains unverified relocation type instead of claiming every examined record
     relocationCount: 2,
     relocationTypes: [0, 5],
     symbolRelativeCount: 0,
+    linkBase: 0,
+    prelinkBase: null,
   });
   assert.match(
     ghidraMipsUnsupportedReason(target) ?? "",

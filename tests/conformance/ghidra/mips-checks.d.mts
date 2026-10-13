@@ -9,7 +9,7 @@ export function parseMipsReadelf(
   text: string,
   byteOrder: string,
   floatAbi?: MipsFloatAbi,
-  objectType?: "exec" | "rel",
+  objectType?: "exec" | "rel" | "dyn",
 ): MipsReadelfFacts;
 export function inspectMipsReadelf(
   path: string,

@@ -1,5 +1,6 @@
 import { analysisErrorWithCleanupFailure } from "../domain/analysisErrorCleanup.js";
 import { fileURLToPath } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 
 import {
   createAnalysisExecution,
@@ -61,6 +62,8 @@ import { ghidraPspExtensionSchema } from "./GhidraPspExtension.js";
 import {
   GHIDRA_MIPS_SOFT_FLOAT_STORAGE,
   ghidraMipsSoftFloatFailure,
+  ghidraMipsElfImageBase,
+  ghidraMipsElfImageBaseCommitment,
   ghidraMipsRelocatableLimitations,
   ghidraMipsSharedLimitations,
   ghidraMipsSoftFloatLimitations,
@@ -416,6 +419,21 @@ export const createGhidraProviderClient = (input: {
         },
       }),
     );
+  const elfImageBase = ghidraMipsElfImageBase(target);
+  if (
+    !isDeepStrictEqual(
+      committedProfile.parameters.elf_image_base,
+      ghidraMipsElfImageBaseCommitment(target),
+    )
+  )
+    return unavailableClient(
+      new ProviderAdapterError("ghidra", "open_binary", {
+        diagnostics: {
+          reason:
+            "Resolve the MIPS shared-image link base into the analysis profile before opening the session.",
+        },
+      }),
+    );
   const extensionProfile = ghidraExtensionSchema
     .array()
     .safeParse(committedProfile.parameters.analysis_extensions ?? []);
@@ -552,6 +570,7 @@ export const createGhidraProviderClient = (input: {
         ? { pspExtension: pspExtension.data }
         : {}),
       ...(softFloat ? { mipsSoftFloat: true as const } : {}),
+      ...(elfImageBase === undefined ? {} : { elfImageBase }),
       ...(target.format === "dos-mz" ? { dosMz: true } : {}),
       ...(target.format === "dos-com" ? { dosCom: true } : {}),
       ...(rawLanguage === undefined || target.format !== "raw-binary"
@@ -606,6 +625,9 @@ export const createGhidraProviderClient = (input: {
           expectedCompilerSpecId: "default",
         }
       : {}),
+    ...(elfImageBase === undefined
+      ? {}
+      : { expectedImageBase: `0x${elfImageBase}` }),
     ...(context === undefined ? {} : { runId: context.runId }),
     logger: logger.child({ layer: "ghidra-bridge" }),
   });
