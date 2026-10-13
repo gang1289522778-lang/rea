@@ -1,15 +1,21 @@
+import { isUtf8 } from "node:buffer";
 import { spawn, type ChildProcess } from "node:child_process";
 import type { EventEmitter } from "node:events";
 import type { Readable, Writable } from "node:stream";
 
+import { AnalysisCapabilityUnavailableError } from "../domain/analysisErrorCore.js";
 import { WindowsOwnedProcess } from "../windows/WindowsOwnedProcess.js";
 
 import type {
   OwnedProcessGroup,
+  ProcessOwnershipBaseline,
   ProcessCleanupFailure,
   ProcessCleanupResult,
 } from "./ProcessOwnership.js";
-import { prepareProcessOwnershipInspection } from "./ProcessOwnershipObservation.js";
+import {
+  prepareProcessOwnershipInspection,
+  systemProcessOwnershipHost,
+} from "./ProcessOwnershipObservation.js";
 
 const DEFAULT_TERMINATION_GRACE_MS = 250;
 const DEFAULT_KILL_GRACE_MS = 1_000;
@@ -36,6 +42,8 @@ export interface OwnedProviderProcessSpawnOptions {
    * Windows Job Object. Other launchers cannot enforce it and refuse it.
    */
   readonly memoryLimitBytes?: number;
+  /** Sweep exact run-token descendants during POSIX cleanup. */
+  readonly sweepTokenOwnedProcesses?: boolean;
   /** Cancels native ownership preparation before provider process creation. */
   readonly signal?: AbortSignal;
 }
@@ -93,6 +101,8 @@ export interface ProviderProcessSnapshot {
   readonly diagnosticTruncated?: boolean;
   readonly stdout: {
     readonly text: string;
+    /** True when retained bytes cannot be represented exactly as UTF-8 text. */
+    readonly invalidUtf8?: true;
     /** Bytes retained in text, limited by maxDiagnosticBytes when configured. */
     readonly bytes: number;
     /** All bytes drained from this stream since construction or resetOutput. */
@@ -100,6 +110,8 @@ export interface ProviderProcessSnapshot {
   };
   readonly stderr: {
     readonly text: string;
+    /** True when retained bytes cannot be represented exactly as UTF-8 text. */
+    readonly invalidUtf8?: true;
     /** Bytes retained in text, limited by maxDiagnosticBytes when configured. */
     readonly bytes: number;
     readonly observedBytes: number;
@@ -172,6 +184,20 @@ export const spawnOwnedProviderProcess = async (
   await prepareProcessOwnershipInspection(options.signal);
   options.signal?.throwIfAborted();
   const platform = options.platform ?? process.platform;
+  const sweepTokenOwnedProcesses =
+    options.sweepTokenOwnedProcesses === true && platform !== "win32";
+  let captureBaseline: ProcessOwnershipBaseline | undefined;
+  if (sweepTokenOwnedProcesses) {
+    const capture = systemProcessOwnershipHost.captureBaseline;
+    if (capture === undefined)
+      throw new AnalysisCapabilityUnavailableError(
+        "process",
+        "spawn_owned_provider",
+        `Exact run-token process inspection is unavailable on ${platform}. Run this inspection on Linux with procps-compatible ps, macOS, or Windows; this host cannot safely supervise these provider commands.`,
+      );
+    captureBaseline = await capture(options.signal);
+    options.signal?.throwIfAborted();
+  }
   const hostEnvironment = options.hostEnvironment ?? process.env;
   const environment = {
     ...hostEnvironment,
@@ -224,6 +250,12 @@ export const spawnOwnedProviderProcess = async (
     leaderPid: pid,
     processGroupId: pid,
     expectedParentPid: process.pid,
+    ...(sweepTokenOwnedProcesses
+      ? {
+          sweepTokenOwnedProcesses: true,
+          captureBaseline: captureBaseline!,
+        }
+      : {}),
     ...(options.expectedCommand === null
       ? {}
       : { expectedCommand: options.expectedCommand ?? options.command }),
@@ -542,11 +574,14 @@ class ProcessOutputCapture {
   }
 
   snapshot(observedBytes: number): ProviderProcessSnapshot["stdout"] {
-    const text = Buffer.concat(this.#chunks, this.#bytes).toString("utf8");
+    const buffer = Buffer.concat(this.#chunks, this.#bytes);
+    const text = buffer.toString("utf8");
+    const invalidUtf8 = !isUtf8(buffer);
     return {
       text,
       bytes: this.#bytes,
       observedBytes,
+      ...(invalidUtf8 ? { invalidUtf8: true } : {}),
     };
   }
 }

@@ -43,6 +43,10 @@ const SOURCE_PATHS = {
   sessionContracts: "dist/contracts/sessionToolContracts.js",
   binaryDiagnosticsContracts:
     "dist/contracts/native/binaryDiagnosticsToolContracts.js",
+  reverseEngineeringContracts:
+    "dist/contracts/reverseEngineeringToolContracts.js",
+  objdumpProvider: "dist/objdump/ObjdumpCommand.js",
+  rizinProvider: "dist/rizin/RizinCommand.js",
   fridaContracts: "dist/contracts/fridaToolContracts.js",
   fridaProvider: "dist/frida/FridaInstrumentationManager.js",
   pwntoolsProvider: "dist/native/pwntools/PwntoolsRelease.js",
