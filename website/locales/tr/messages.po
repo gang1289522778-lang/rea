@@ -70,11 +70,11 @@ msgstr "Başlangıç N0zoM1z0 * 10 Ekim 2026"
 #: website/public/blog/touhou-reconstruction/index.html:1080
 #: website/public/examples/dino-lab/index.html:475
 #: website/public/faq/index.html:573
-#: website/public/first-investigation/index.html:523
-#: website/public/get-started/index.html:882
+#: website/public/first-investigation/index.html:524
+#: website/public/get-started/index.html:884
 #: website/public/guides/browser/index.html:507
 #: website/public/guides/index.html:282
-#: website/public/guides/javascript/index.html:503
+#: website/public/guides/javascript/index.html:504
 #: website/public/guides/native/index.html:509 website/public/index.html:1191
 #: website/public/showcase/aegis/index.html:808
 #: website/public/showcase/ctf/index.html:777
@@ -2963,29 +2963,29 @@ msgstr "1. Aracınızı REA'ya bağlayın"
 #. {ph5}: <i>
 #. {ph6}: </i>
 #. {ph7}: </span >
-#: website/public/first-investigation/index.html:229
-#: website/public/first-investigation/index.html:279
-#: website/public/first-investigation/index.html:401
+#: website/public/first-investigation/index.html:230
+#: website/public/first-investigation/index.html:280
+#: website/public/first-investigation/index.html:402
 #, python-brace-format
 msgctxt "page:first-investigation/index.html"
 msgid "{ph0}{ph1}{ph2}{ph3}{ph4}{ph5}{ph6}{ph7}Your coding agent"
 msgstr "{ph0}{ph1}{ph2}{ph3}{ph4}{ph5}{ph6}{ph7}Kodlama aracınız"
 
-#: website/public/first-investigation/index.html:234
-#: website/public/first-investigation/index.html:256
-#: website/public/first-investigation/index.html:284
-#: website/public/first-investigation/index.html:406
-#: website/public/first-investigation/index.html:448
+#: website/public/first-investigation/index.html:235
+#: website/public/first-investigation/index.html:257
+#: website/public/first-investigation/index.html:285
+#: website/public/first-investigation/index.html:407
+#: website/public/first-investigation/index.html:449
 msgctxt "page:first-investigation/index.html"
 msgid "Copy"
 msgstr "Kopyala"
 
-#: website/public/first-investigation/index.html:253
+#: website/public/first-investigation/index.html:254
 msgctxt "page:first-investigation/index.html"
 msgid "Or run this command in your terminal:"
 msgstr "Veya bu komutu terminalinizde çalıştırın:"
 
-#: website/public/first-investigation/index.html:265
+#: website/public/first-investigation/index.html:266
 msgctxt "page:first-investigation/index.html"
 msgid ""
 "Review the plan, approve the setup, then restart your agent. Already "
@@ -2994,14 +2994,14 @@ msgstr ""
 "Planı gözden geçirin, kurulumu onaylayın ve aracınızı yeniden başlatın. "
 "Zaten bağlandınız mı? Aşağıdan devam edin."
 
-#: website/public/first-investigation/index.html:271
+#: website/public/first-investigation/index.html:272
 msgctxt "page:first-investigation/index.html"
 msgid "2. Ask where the CSV is written"
 msgstr "2. CSV'NUN nerede yazıldığını sorun"
 
 #. {ph0}: <strong>
 #. {ph1}: </strong>
-#: website/public/first-investigation/index.html:272
+#: website/public/first-investigation/index.html:273
 #, python-brace-format
 msgctxt "page:first-investigation/index.html"
 msgid ""
@@ -3013,7 +3013,7 @@ msgstr ""
 " Electron uygulamasıdır. Aracınız, Electron'YU yüklemeden veya başlatmadan "
 "kodunu inceleyebilir."
 
-#: website/public/first-investigation/index.html:307
+#: website/public/first-investigation/index.html:308
 msgctxt "page:first-investigation/index.html"
 msgid ""
 "Your agent downloads the files and gives the unpacked folder to REA for "
@@ -3025,14 +3025,14 @@ msgstr ""
 #. {ph0}: <a class="button" href="../examples/notes-example.zip"
 #. download="notes-example.zip" >
 #. {ph1}: </a >
-#: website/public/first-investigation/index.html:311
+#: website/public/first-investigation/index.html:312
 #, python-brace-format
 msgctxt "page:first-investigation/index.html"
 msgid "{ph0}Download example ZIP{ph1}"
 msgstr "{ph0}Örnek ZİP dosyasını indirin{ph1}"
 
 #. {ph0}: <code>notes-example</code>
-#: website/public/first-investigation/index.html:319
+#: website/public/first-investigation/index.html:320
 #, python-brace-format
 msgctxt "page:first-investigation/index.html"
 msgid ""
@@ -3042,12 +3042,12 @@ msgstr ""
 "Temsilciniz dosya indiremiyorsa, bu arşivi kendiniz açın. {ph0} klasörünün "
 "yolunu ve aynı dışa aktarma sorusunu verin."
 
-#: website/public/first-investigation/index.html:326
+#: website/public/first-investigation/index.html:327
 msgctxt "page:first-investigation/index.html"
 msgid "3. Follow the answer back to the code"
 msgstr "3. Cevabı koda geri takip edin"
 
-#: website/public/first-investigation/index.html:327
+#: website/public/first-investigation/index.html:328
 msgctxt "page:first-investigation/index.html"
 msgid "Look for a short explanation with file and line references:"
 msgstr "Dosya ve satır referanslarıyla kısa bir açıklama arayın:"
@@ -3056,7 +3056,7 @@ msgstr "Dosya ve satır referanslarıyla kısa bir açıklama arayın:"
 #. {ph1}: <code>notes.csv</code>
 #. {ph2}: <code>id</code>
 #. {ph3}: <code>title</code>
-#: website/public/first-investigation/index.html:329
+#: website/public/first-investigation/index.html:330
 #, python-brace-format
 msgctxt "page:first-investigation/index.html"
 msgid ""
@@ -3067,12 +3067,12 @@ msgstr ""
 "Düğme bir {ph0} mesajı gönderir. Ana işlem notları CSV olarak biçimlendirir "
 "ve {ph1}. Sütunlar {ph2} ve {ph3}."
 
-#: website/public/first-investigation/index.html:337
+#: website/public/first-investigation/index.html:338
 msgctxt "page:first-investigation/index.html"
 msgid "From the button to the file writer"
 msgstr "Düğmeden dosya yazıcısına"
 
-#: website/public/first-investigation/index.html:366
+#: website/public/first-investigation/index.html:367
 msgctxt "page:first-investigation/index.html"
 msgid ""
 "REA’s static analysis pairs the message with its handler. The destination is"
@@ -3081,7 +3081,7 @@ msgstr ""
 "REA'NUN statik analizi, mesajı işleyicisiyle eşleştirir. Hedef koddan "
 "okunur."
 
-#: website/public/first-investigation/index.html:382
+#: website/public/first-investigation/index.html:383
 msgctxt "page:first-investigation/index.html"
 msgid ""
 "The file path, formatter and write call are together in this handler. Ask "
@@ -3093,18 +3093,18 @@ msgstr ""
 
 #. {ph0}: <a href="../guides/javascript/#follow" >
 #. {ph1}: </a >
-#: website/public/first-investigation/index.html:387
+#: website/public/first-investigation/index.html:388
 #, python-brace-format
 msgctxt "page:first-investigation/index.html"
 msgid "{ph0}See the full code trace and recorded REA result{ph1}."
 msgstr "{ph0}Tam kod izlemesine ve kaydedilen REA sonucuna bakın{ph1}."
 
-#: website/public/first-investigation/index.html:394
+#: website/public/first-investigation/index.html:395
 msgctxt "page:first-investigation/index.html"
 msgid "4. Check a prediction"
 msgstr "4. Bir tahmini kontrol edin"
 
-#: website/public/first-investigation/index.html:395
+#: website/public/first-investigation/index.html:396
 msgctxt "page:first-investigation/index.html"
 msgid ""
 "A comma separates CSV columns. What happens when a note title itself "
@@ -3113,19 +3113,19 @@ msgstr ""
 "Virgül, CSV sütunlarını ayırır. Bir not başlığının kendisi virgül veya "
 "tırnak işareti içeriyorsa ne olur?"
 
-#: website/public/first-investigation/index.html:439
+#: website/public/first-investigation/index.html:440
 msgctxt "page:first-investigation/index.html"
 msgid "Run the check yourself"
 msgstr "Kontrolü kendin yap"
 
 #. {ph0}: <code>notes-example</code>
-#: website/public/first-investigation/index.html:440
+#: website/public/first-investigation/index.html:441
 #, python-brace-format
 msgctxt "page:first-investigation/index.html"
 msgid "Open a terminal in the unpacked {ph0} folder:"
 msgstr "Paketlenmemiş {ph0} klasöründe bir terminal açın:"
 
-#: website/public/first-investigation/index.html:462
+#: website/public/first-investigation/index.html:463
 msgctxt "page:first-investigation/index.html"
 msgid ""
 "This command uses a shell with here-document support, such as Bash or Zsh. "
@@ -3135,24 +3135,24 @@ msgstr ""
 "kullanır. Aracınız aynı JavaScript'YU platformunuzun kabuğunda "
 "çalıştırabilir."
 
-#: website/public/first-investigation/index.html:470
+#: website/public/first-investigation/index.html:471
 msgctxt "page:first-investigation/index.html"
 msgid "5. Ask another question"
 msgstr "5. Başka bir soru sor"
 
-#: website/public/first-investigation/index.html:471
+#: website/public/first-investigation/index.html:472
 msgctxt "page:first-investigation/index.html"
 msgid "Try a follow-up in the same conversation:"
 msgstr "Aynı sohbette bir takip yapmayı deneyin:"
 
-#: website/public/first-investigation/index.html:473
+#: website/public/first-investigation/index.html:474
 msgctxt "page:first-investigation/index.html"
 msgid ""
 "What happens if the file can’t be written? Follow the error back to the "
 "page."
 msgstr "Dosya yazılamazsa ne olur? Hatayı sayfaya geri izleyin."
 
-#: website/public/first-investigation/index.html:478
+#: website/public/first-investigation/index.html:479
 msgctxt "page:first-investigation/index.html"
 msgid ""
 "Or give your agent an app of your own and ask about one button, file or "
@@ -3165,7 +3165,7 @@ msgstr ""
 #. {ph1}: </a >
 #. {ph2}: <span >
 #. {ph3}: </span >
-#: website/public/first-investigation/index.html:483
+#: website/public/first-investigation/index.html:484
 #, python-brace-format
 msgctxt "page:first-investigation/index.html"
 msgid ""
@@ -3179,7 +3179,7 @@ msgstr ""
 #. {ph1}: </a >
 #. {ph2}: <span >
 #. {ph3}: </span >
-#: website/public/first-investigation/index.html:489
+#: website/public/first-investigation/index.html:490
 #, python-brace-format
 msgctxt "page:first-investigation/index.html"
 msgid ""
@@ -3193,7 +3193,7 @@ msgstr ""
 #. {ph1}: </a >
 #. {ph2}: <span >
 #. {ph3}: </span >
-#: website/public/first-investigation/index.html:497
+#: website/public/first-investigation/index.html:498
 #, python-brace-format
 msgctxt "page:first-investigation/index.html"
 msgid ""
@@ -3228,32 +3228,32 @@ msgctxt "page:first-investigation/index.html"
 msgid "Your first REA investigation"
 msgstr "İlk REA araştırmanız"
 
-#: website/public/first-investigation/index.html:234
+#: website/public/first-investigation/index.html:235
 msgctxt "page:first-investigation/index.html"
 msgid "Copy REA installation prompt"
 msgstr "REA kurulum istemini kopyalayın"
 
-#: website/public/first-investigation/index.html:256
+#: website/public/first-investigation/index.html:257
 msgctxt "page:first-investigation/index.html"
 msgid "Copy setup command"
 msgstr "Kurulum komutunu kopyala"
 
-#: website/public/first-investigation/index.html:284
+#: website/public/first-investigation/index.html:285
 msgctxt "page:first-investigation/index.html"
 msgid "Copy Notes investigation prompt"
 msgstr "Notları Kopyala soruşturma istemi"
 
-#: website/public/first-investigation/index.html:406
+#: website/public/first-investigation/index.html:407
 msgctxt "page:first-investigation/index.html"
 msgid "Copy CSV check prompt"
 msgstr "CSV onay istemini kopyala"
 
-#: website/public/first-investigation/index.html:448
+#: website/public/first-investigation/index.html:449
 msgctxt "page:first-investigation/index.html"
 msgid "Copy formatter check command"
 msgstr "Biçimlendirici onay komutunu kopyala"
 
-#: website/public/first-investigation/index.html:523
+#: website/public/first-investigation/index.html:524
 msgctxt "page:first-investigation/index.html"
 msgid "Back to top"
 msgstr "Başa dön"
@@ -3284,49 +3284,49 @@ msgstr ""
 "REA'YU kodlama aracınıza bağlayın veya terminalinizden yerel bir uygulamayı "
 "inceleyin."
 
-#: website/public/get-started/index.html:208
+#: website/public/get-started/index.html:210
 msgctxt "page:get-started/index.html"
 msgid "Open a terminal and check:"
 msgstr "Bir terminal açın ve kontrol edin:"
 
-#: website/public/get-started/index.html:211
-#: website/public/get-started/index.html:468
+#: website/public/get-started/index.html:213
+#: website/public/get-started/index.html:470
 msgctxt "page:get-started/index.html"
 msgid "Terminal"
 msgstr "Terminal"
 
-#: website/public/get-started/index.html:212
-#: website/public/get-started/index.html:233
-#: website/public/get-started/index.html:256
-#: website/public/get-started/index.html:272
-#: website/public/get-started/index.html:287
-#: website/public/get-started/index.html:302
-#: website/public/get-started/index.html:318
-#: website/public/get-started/index.html:337
-#: website/public/get-started/index.html:423
-#: website/public/get-started/index.html:469
-#: website/public/get-started/index.html:545
-#: website/public/get-started/index.html:604
-#: website/public/get-started/index.html:645
-#: website/public/get-started/index.html:677
-#: website/public/get-started/index.html:734
-#: website/public/get-started/index.html:775
-#: website/public/get-started/index.html:815
-#: website/public/get-started/index.html:831
+#: website/public/get-started/index.html:214
+#: website/public/get-started/index.html:235
+#: website/public/get-started/index.html:258
+#: website/public/get-started/index.html:274
+#: website/public/get-started/index.html:289
+#: website/public/get-started/index.html:304
+#: website/public/get-started/index.html:320
+#: website/public/get-started/index.html:339
+#: website/public/get-started/index.html:425
+#: website/public/get-started/index.html:471
+#: website/public/get-started/index.html:547
+#: website/public/get-started/index.html:606
+#: website/public/get-started/index.html:647
+#: website/public/get-started/index.html:679
+#: website/public/get-started/index.html:736
+#: website/public/get-started/index.html:777
+#: website/public/get-started/index.html:817
+#: website/public/get-started/index.html:833
 msgctxt "page:get-started/index.html"
 msgid "Copy"
 msgstr "Kopyala"
 
 #. {ph0}: <strong>
 #. {ph1}: </strong>
-#: website/public/get-started/index.html:229
+#: website/public/get-started/index.html:231
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid "{ph0}Windows (PowerShell){ph1}"
 msgstr "{ph0} Windows (PowerShell){ph1}"
 
 #. {ph0}: <code>node -v</code>
-#: website/public/get-started/index.html:244
+#: website/public/get-started/index.html:246
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid ""
@@ -3339,7 +3339,7 @@ msgstr ""
 #. {ph0}: <em>
 #. {ph1}: </em>
 #. {ph2}: <code>npx</code>
-#: website/public/get-started/index.html:248
+#: website/public/get-started/index.html:250
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid ""
@@ -3349,17 +3349,17 @@ msgstr ""
 "PowerShell daha sonra {ph0}npx'i{ph1} çalıştırdığınızda {ph2} diyorsa, bunu "
 "bir kez çalıştırın ve tekrar deneyin:"
 
-#: website/public/get-started/index.html:268
+#: website/public/get-started/index.html:270
 msgctxt "page:get-started/index.html"
 msgid "If you use Homebrew:"
 msgstr "Homebrew kullanıyorsanız :"
 
-#: website/public/get-started/index.html:283
+#: website/public/get-started/index.html:285
 msgctxt "page:get-started/index.html"
 msgid "Otherwise:"
 msgstr "Aksi takdirde:"
 
-#: website/public/get-started/index.html:298
+#: website/public/get-started/index.html:300
 msgctxt "page:get-started/index.html"
 msgid "Close Terminal, open it again, then:"
 msgstr "Terminali kapatın, tekrar açın, ardından:"
@@ -3367,7 +3367,7 @@ msgstr "Terminali kapatın, tekrar açın, ardından:"
 #. {ph0}: <code>curl</code>
 #. {ph1}: <code>unzip</code>
 #. {ph2}: <code>sudo apt install curl unzip</code>
-#: website/public/get-started/index.html:329
+#: website/public/get-started/index.html:331
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid ""
@@ -3379,7 +3379,7 @@ msgstr ""
 
 #. {ph0}: <code>nodejs</code>
 #. {ph1}: <code>node -v</code>
-#: website/public/get-started/index.html:349
+#: website/public/get-started/index.html:351
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid ""
@@ -3391,7 +3391,7 @@ msgstr ""
 
 #. {ph0}: <a href="https://nodejs.org/en/download">
 #. {ph1}: </a>
-#: website/public/get-started/index.html:353
+#: website/public/get-started/index.html:355
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid ""
@@ -3401,14 +3401,14 @@ msgstr ""
 "Normal bir yükleyiciyi mi tercih edersiniz? LTS sürümünü şuradan indirin: "
 "{ph0}nodejs.org{ph1} ."
 
-#: website/public/get-started/index.html:361
+#: website/public/get-started/index.html:363
 msgctxt "page:get-started/index.html"
 msgid "Setup options"
 msgstr "Kurulum seçenekleri"
 
 #. {ph0}: <a href="#agent">
 #. {ph1}: </a>
-#: website/public/get-started/index.html:363
+#: website/public/get-started/index.html:365
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid "{ph0}Connect your coding agent{ph1}"
@@ -3416,7 +3416,7 @@ msgstr "{ph0}Kodlama aracınızı bağlayın{ph1}"
 
 #. {ph0}: <a href="#terminal">
 #. {ph1}: </a>
-#: website/public/get-started/index.html:364
+#: website/public/get-started/index.html:366
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid "{ph0}Use the CLI{ph1}"
@@ -3424,7 +3424,7 @@ msgstr "{ph0}CLI'YU kullanın{ph1}"
 
 #. {ph0}: <a href="#native">
 #. {ph1}: </a>
-#: website/public/get-started/index.html:365
+#: website/public/get-started/index.html:367
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid "{ph0}Set up native analysis{ph1}"
@@ -3432,18 +3432,18 @@ msgstr "{ph0}Makine kodu programlarının analizini ayarlama{ph1}"
 
 #. {ph0}: <a href="#help">
 #. {ph1}: </a>
-#: website/public/get-started/index.html:366
+#: website/public/get-started/index.html:368
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid "{ph0}Getting help{ph1}"
 msgstr "{ph0}Yardım almak{ph1}"
 
-#: website/public/get-started/index.html:371
+#: website/public/get-started/index.html:373
 msgctxt "page:get-started/index.html"
 msgid "Connect your coding agent"
 msgstr "Kodlama aracınızı bağlayın"
 
-#: website/public/get-started/index.html:372
+#: website/public/get-started/index.html:374
 msgctxt "page:get-started/index.html"
 msgid ""
 "Run setup to connect REA to your coding agent. Client choices include Claude"
@@ -3455,12 +3455,12 @@ msgstr ""
 "desteklenen diğer MCP istemcileri bulunur. Grok Bot'un konektörü sohbetinden"
 " eklenir."
 
-#: website/public/get-started/index.html:379
+#: website/public/get-started/index.html:381
 msgctxt "page:get-started/index.html"
 msgid "New to coding agents?"
 msgstr "Kodlama ajanlarında yeni misiniz?"
 
-#: website/public/get-started/index.html:380
+#: website/public/get-started/index.html:382
 msgctxt "page:get-started/index.html"
 msgid ""
 "A coding agent is an AI assistant that works on your computer instead of in "
@@ -3471,7 +3471,7 @@ msgstr ""
 "zeka yardımcısıdır. Dosyaları okuyabilir ve komutları çalıştırabilir ve "
 "değişiklik yapmadan önce sorar.  REA, tersine mühendislik araçları sağlar."
 
-#: website/public/get-started/index.html:386
+#: website/public/get-started/index.html:388
 msgctxt "page:get-started/index.html"
 msgid ""
 "If you don't have one yet, pick one, follow its install page and sign in:"
@@ -3483,7 +3483,7 @@ msgstr ""
 #. {ph1}: <a href="https://code.claude.com/docs/en/setup" >
 #. {ph2}: </a >
 #. {ph3}: </strong >
-#: website/public/get-started/index.html:391
+#: website/public/get-started/index.html:393
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid ""
@@ -3496,7 +3496,7 @@ msgstr ""
 #. {ph1}: <a href="https://github.com/openai/codex">
 #. {ph2}: </a>
 #. {ph3}: </strong >
-#: website/public/get-started/index.html:399
+#: website/public/get-started/index.html:401
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid ""
@@ -3509,7 +3509,7 @@ msgstr ""
 #. {ph1}: <a href="https://opencode.ai/docs">
 #. {ph2}: </a>
 #. {ph3}: </strong >
-#: website/public/get-started/index.html:405
+#: website/public/get-started/index.html:407
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid ""
@@ -3519,7 +3519,7 @@ msgstr ""
 "{ph0}{ph1} OpenCode{ph2}{ph3}, açık kaynak. Seçtiğiniz model sağlayıcısını "
 "bağlayın."
 
-#: website/public/get-started/index.html:411
+#: website/public/get-started/index.html:413
 msgctxt "page:get-started/index.html"
 msgid ""
 "Then open it and copy the prompt below into it. The agent runs REA's setup "
@@ -3537,18 +3537,18 @@ msgstr ""
 #. {ph5}: <i>
 #. {ph6}: </i>
 #. {ph7}: </span >
-#: website/public/get-started/index.html:418
+#: website/public/get-started/index.html:420
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid "{ph0}{ph1}{ph2}{ph3}{ph4}{ph5}{ph6}{ph7}Your coding agent"
 msgstr "{ph0}{ph1}{ph2}{ph3}{ph4}{ph5}{ph6}{ph7}Kodlama aracınız"
 
-#: website/public/get-started/index.html:443
+#: website/public/get-started/index.html:445
 msgctxt "page:get-started/index.html"
 msgid "Or run setup yourself"
 msgstr "Veya kurulumu kendiniz çalıştırın"
 
-#: website/public/get-started/index.html:445
+#: website/public/get-started/index.html:447
 msgctxt "page:get-started/index.html"
 msgid "How do I open a terminal?"
 msgstr "Terminali nasıl açarım?"
@@ -3557,7 +3557,7 @@ msgstr "Terminali nasıl açarım?"
 #. {ph1}: </strong>
 #. {ph2}: <em>
 #. {ph3}: </em>
-#: website/public/get-started/index.html:447
+#: website/public/get-started/index.html:449
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid ""
@@ -3573,7 +3573,7 @@ msgstr ""
 #. {ph3}: <kbd>Space</kbd>
 #. {ph4}: <em>
 #. {ph5}: </em>
-#: website/public/get-started/index.html:451
+#: website/public/get-started/index.html:453
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid ""
@@ -3587,7 +3587,7 @@ msgstr ""
 #. {ph2}: <kbd>Ctrl</kbd>
 #. {ph3}: <kbd>Alt</kbd>
 #. {ph4}: <kbd>T</kbd>
-#: website/public/get-started/index.html:455
+#: website/public/get-started/index.html:457
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid "{ph0}Linux:{ph1} press {ph2} {ph3} {ph4} on most desktops."
@@ -3600,7 +3600,7 @@ msgstr "{ph0} Linux:{ph1} çoğu masaüstünde {ph2} {ph3} {ph4} tuşlarına bas
 #. {ph4}: <kbd>Ctrl</kbd>
 #. {ph5}: <kbd>Shift</kbd>
 #. {ph6}: <kbd>V</kbd>
-#: website/public/get-started/index.html:460
+#: website/public/get-started/index.html:462
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid ""
@@ -3610,7 +3610,7 @@ msgstr ""
 "{ph0} {ph1} ile bir komut yapıştırın ( macOS : {ph2} {ph3}; Linux "
 "terminalleri: {ph4} {ph5} {ph6}), ardından Enter tuşuna basın."
 
-#: website/public/get-started/index.html:481
+#: website/public/get-started/index.html:483
 msgctxt "page:get-started/index.html"
 msgid ""
 "Choose your client and review the setup plan. REA adds its MCP connection "
@@ -3621,12 +3621,12 @@ msgstr ""
 "ve eşleşen araştırma becerisini ekleyerek mevcut yapılandırmanın yedeğini "
 "alır. Değişiklikleri uygulamadan önce sorar."
 
-#: website/public/get-started/index.html:486
+#: website/public/get-started/index.html:488
 msgctxt "page:get-started/index.html"
 msgid "Restart your client when setup finishes."
 msgstr "Kur tamamlandığında istemcinizi yeniden başlatın."
 
-#: website/public/get-started/index.html:488
+#: website/public/get-started/index.html:490
 msgctxt "page:get-started/index.html"
 msgid "How do I restart my client?"
 msgstr "Müvekkilimi nasıl yeniden başlatırım?"
@@ -3635,7 +3635,7 @@ msgstr "Müvekkilimi nasıl yeniden başlatırım?"
 #. {ph1}: </strong>
 #. {ph2}: <kbd>⌘</kbd>
 #. {ph3}: <kbd>Q</kbd>
-#: website/public/get-started/index.html:489
+#: website/public/get-started/index.html:491
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid ""
@@ -3651,7 +3651,7 @@ msgstr ""
 
 #. {ph0}: <strong>
 #. {ph1}: </strong>
-#: website/public/get-started/index.html:496
+#: website/public/get-started/index.html:498
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid ""
@@ -3661,7 +3661,7 @@ msgstr ""
 "{ph0}Terminal aracıları{ph1} (Claude Code, Codex , Gemini CLI ): oturumdan "
 "çıkın ve yeniden başlatın."
 
-#: website/public/get-started/index.html:501
+#: website/public/get-started/index.html:503
 msgctxt "page:get-started/index.html"
 msgid ""
 "Give your agent a target path and a specific question. For a JavaScript or "
@@ -3671,7 +3671,7 @@ msgstr ""
 "Electron uygulaması için şununla başlayabilirsiniz:"
 
 #. {ph0}: <code>/absolute/path/to/app</code>
-#: website/public/get-started/index.html:506
+#: website/public/get-started/index.html:508
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid ""
@@ -3682,12 +3682,12 @@ msgstr ""
 " noktalarını, aramaları ve bağımlılıkları, bulgularınızın kaynak "
 "konumlarıyla birlikte gösterin."
 
-#: website/public/get-started/index.html:512
+#: website/public/get-started/index.html:514
 msgctxt "page:get-started/index.html"
 msgid "Replace the path with your local target."
 msgstr "Yolu yerel hedefinizle değiştirin."
 
-#: website/public/get-started/index.html:514
+#: website/public/get-started/index.html:516
 msgctxt "page:get-started/index.html"
 msgid "How do I get a folder's full path?"
 msgstr "Bir klasörün tam yolunu nasıl alabilirim?"
@@ -3696,7 +3696,7 @@ msgstr "Bir klasörün tam yolunu nasıl alabilirim?"
 #. {ph1}: </strong>
 #. {ph2}: <em>
 #. {ph3}: </em>
-#: website/public/get-started/index.html:516
+#: website/public/get-started/index.html:518
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid ""
@@ -3711,7 +3711,7 @@ msgstr ""
 #. {ph1}: </strong>
 #. {ph2}: <em>
 #. {ph3}: </em>
-#: website/public/get-started/index.html:521
+#: website/public/get-started/index.html:523
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid ""
@@ -3723,7 +3723,7 @@ msgstr ""
 
 #. {ph0}: <strong>
 #. {ph1}: </strong>
-#: website/public/get-started/index.html:525
+#: website/public/get-started/index.html:527
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid ""
@@ -3733,18 +3733,18 @@ msgstr ""
 "{ph0}Herhangi bir sistem:{ph1} klasörü bir terminal penceresine sürükleyin "
 "ve yolu görünür."
 
-#: website/public/get-started/index.html:530
+#: website/public/get-started/index.html:532
 msgctxt "page:get-started/index.html"
 msgid "In a terminal, put quotes around a path that contains spaces."
 msgstr ""
 "Bir terminalde, boşluk içeren bir yolun etrafına tırnak işaretleri koyun."
 
-#: website/public/get-started/index.html:537
+#: website/public/get-started/index.html:539
 msgctxt "page:get-started/index.html"
 msgid "Use the CLI"
 msgstr "CLI'YU kullanın"
 
-#: website/public/get-started/index.html:538
+#: website/public/get-started/index.html:540
 msgctxt "page:get-started/index.html"
 msgid ""
 "Analyze a JavaScript or Electron application folder or ASAR archive without "
@@ -3753,14 +3753,14 @@ msgstr ""
 "Uygulamayı çalıştırmadan bir JavaScript veya Electron uygulama klasörünü "
 "veya ASAR arşivini analiz edin:"
 
-#: website/public/get-started/index.html:544
+#: website/public/get-started/index.html:546
 msgctxt "page:get-started/index.html"
 msgid "Static application analysis"
 msgstr "Statik uygulama analizi"
 
 #. {ph0}: <code>.asar</code>
 #. {ph1}: <code>"D:/apps/example"</code>
-#: website/public/get-started/index.html:557
+#: website/public/get-started/index.html:559
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid ""
@@ -3770,13 +3770,13 @@ msgstr ""
 "Yolu çıkarılan uygulama dizininizle değiştirin veya {ph0} dosyası. "
 "Windows'DA {ph1} burada çalışıyor."
 
-#: website/public/get-started/index.html:563
+#: website/public/get-started/index.html:565
 msgctxt "page:get-started/index.html"
 msgid "Where do I find an app's .asar file?"
 msgstr "Bir uygulamayı nerede bulabilirim.asar dosyası mı?"
 
 #. {ph0}: <code>resources</code>
-#: website/public/get-started/index.html:564
+#: website/public/get-started/index.html:566
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid "Electron apps usually keep it in a {ph0} folder:"
@@ -3787,7 +3787,7 @@ msgstr "Electron uygulamaları genellikle bir {ph0} klasöründe saklar:"
 #. {ph2}: <code
 #. >C:\Users\&lt;you&gt;\AppData\Local\Programs\&lt;App&gt;\resources\app.asar</code
 #. >
-#: website/public/get-started/index.html:569
+#: website/public/get-started/index.html:571
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid "{ph0}Windows:{ph1} {ph2}"
@@ -3799,7 +3799,7 @@ msgstr "{ph0}Windows:{ph1} {ph2}"
 #. >/Applications/&lt;App&gt;.app/Contents/Resources/app.asar</code >
 #. {ph3}: <em>
 #. {ph4}: </em>
-#: website/public/get-started/index.html:575
+#: website/public/get-started/index.html:577
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid ""
@@ -3812,20 +3812,20 @@ msgstr ""
 #. {ph0}: <strong>
 #. {ph1}: </strong>
 #. {ph2}: <code>/opt/&lt;App&gt;/resources/app.asar</code>
-#: website/public/get-started/index.html:583
+#: website/public/get-started/index.html:585
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid "{ph0}Linux:{ph1} often {ph2}"
 msgstr "{ph0} Linux:{ph1} genellikle {ph2}"
 
 #. {ph0}: <code>app.asar</code>
-#: website/public/get-started/index.html:588
+#: website/public/get-started/index.html:590
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid "Some apps install elsewhere. Search the app's folder for {ph0}."
 msgstr "Bazı uygulamalar başka bir yere yüklenir. Uygulama için {ph0}."
 
-#: website/public/get-started/index.html:593
+#: website/public/get-started/index.html:595
 msgctxt "page:get-started/index.html"
 msgid ""
 "The result identifies the app, shows connections between modules and gives "
@@ -3837,31 +3837,31 @@ msgstr ""
 "işaretlenir."
 
 #. {ph0}: <code>rea</code>
-#: website/public/get-started/index.html:598
+#: website/public/get-started/index.html:600
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid "If you'd like a permanent {ph0} command in your shell:"
 msgstr "Kabuğunuzda kalıcı bir {ph0} komutu istiyorsanız:"
 
-#: website/public/get-started/index.html:603
+#: website/public/get-started/index.html:605
 msgctxt "page:get-started/index.html"
 msgid "Install the CLI"
 msgstr "CLI'YU kurun"
 
 #. {ph0}: <a href="../guides/javascript/" >
 #. {ph1}: </a >
-#: website/public/get-started/index.html:615
+#: website/public/get-started/index.html:617
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid "{ph0}Continue with the JavaScript application guide{ph1}"
 msgstr "{ph0}JavaScript uygulama kılavuzu ile devam edin{ph1}"
 
-#: website/public/get-started/index.html:623
+#: website/public/get-started/index.html:625
 msgctxt "page:get-started/index.html"
 msgid "Set up native analysis"
 msgstr "Makine kodu programlarının analizini ayarlama"
 
-#: website/public/get-started/index.html:624
+#: website/public/get-started/index.html:626
 msgctxt "page:get-started/index.html"
 msgid ""
 "Native binaries need a local analysis tool. Choose and configure one below, "
@@ -3871,12 +3871,12 @@ msgstr ""
 "Aşağıdan birini seçin ve yapılandırın, ardından REA'YA yürütülebilir "
 "dosyanızı veya kitaplığınızı verin."
 
-#: website/public/get-started/index.html:629
+#: website/public/get-started/index.html:631
 msgctxt "page:get-started/index.html"
 msgid "Choose a tool: Ghidra, Hopper or IDA"
 msgstr "Bir araç seçin: Ghidra, Hopper veya IDA"
 
-#: website/public/get-started/index.html:634
+#: website/public/get-started/index.html:636
 msgctxt "page:get-started/index.html"
 msgid ""
 "Use an existing Ghidra 12.1.x installation and a 64-bit JDK 21 or newer on "
@@ -3888,17 +3888,17 @@ msgstr ""
 " mimariniz için yerel bir kod çözücüye ihtiyacı vardır. Kur'u çalıştırmadan "
 "önce yolları ayarlama:"
 
-#: website/public/get-started/index.html:641
+#: website/public/get-started/index.html:643
 msgctxt "page:get-started/index.html"
 msgid "Connect your Ghidra installation"
 msgstr "Ghidra kurulumunuzu bağlayın"
 
-#: website/public/get-started/index.html:644
+#: website/public/get-started/index.html:646
 msgctxt "page:get-started/index.html"
 msgid "Ghidra connection · macOS / Linux"
 msgstr "Ghidra bağlantısı · macOS / Linux"
 
-#: website/public/get-started/index.html:659
+#: website/public/get-started/index.html:661
 msgctxt "page:get-started/index.html"
 msgid ""
 "Replace both paths with your existing installations. Setup checks them and "
@@ -3909,12 +3909,12 @@ msgstr ""
 "seçtiğiniz istemci için geçerli ayarları kaydeder. Linux arm64'te, "
 "Ghidra'NUN yerel kod çözücüsünü ayrı ayrı oluşturmanız gerekebilir."
 
-#: website/public/get-started/index.html:667
+#: website/public/get-started/index.html:669
 msgctxt "page:get-started/index.html"
 msgid "Connect Ghidra on Windows"
 msgstr "Ghidra'YU Windows'ya bağlayın"
 
-#: website/public/get-started/index.html:668
+#: website/public/get-started/index.html:670
 msgctxt "page:get-started/index.html"
 msgid ""
 "Windows x64 has experimental, read-only support for native x86 and x64 PE "
@@ -3925,12 +3925,12 @@ msgstr ""
 "sürücülerindeki dll'ler için deneysel, salt okunur desteğe sahiptir. Mevcut "
 "bir Ghidra 12.1 kullanın.x kurulum ve 64 bit JDK 21 veya daha yenisi:"
 
-#: website/public/get-started/index.html:676
+#: website/public/get-started/index.html:678
 msgctxt "page:get-started/index.html"
 msgid "Ghidra connection · Windows PowerShell"
 msgstr "Ghidra bağlantısı * Windows PowerShell"
 
-#: website/public/get-started/index.html:691
+#: website/public/get-started/index.html:693
 msgctxt "page:get-started/index.html"
 msgid ""
 "Replace the two paths with your installations, then review setup's plan."
@@ -3938,7 +3938,7 @@ msgstr ""
 "İki yolu kurulumlarınızla değiştirin, ardından kurulum planını gözden "
 "geçirin."
 
-#: website/public/get-started/index.html:701
+#: website/public/get-started/index.html:703
 msgctxt "page:get-started/index.html"
 msgid ""
 "Connect Hopper on macOS or Linux. Run the setup command above; it detects an"
@@ -3948,7 +3948,7 @@ msgstr ""
 "çalıştırın; Mevcut bir kurulumu algılar veya onayınız için bir kurulum planı"
 " sunar."
 
-#: website/public/get-started/index.html:706
+#: website/public/get-started/index.html:708
 msgctxt "page:get-started/index.html"
 msgid ""
 "On macOS, complete Hopper's first-run choice of demo mode or license "
@@ -3957,7 +3957,7 @@ msgstr ""
 "macOS'DA, katılımsız bir analizden önce Hopper'NUN ilk deneme modu seçimini "
 "veya lisans etkinleştirmesini tamamlayın."
 
-#: website/public/get-started/index.html:715
+#: website/public/get-started/index.html:717
 msgctxt "page:get-started/index.html"
 msgid ""
 "The verified IDA setups use Windows, with an existing MCP registration for "
@@ -3968,7 +3968,7 @@ msgstr ""
 "mevcut bir MCP kaydıyla Windows kullanır.  Linux ve macOS başsız analizi "
 "doğrulanmamıştır."
 
-#: website/public/get-started/index.html:721
+#: website/public/get-started/index.html:723
 msgctxt "page:get-started/index.html"
 msgid "Connect an existing IDA MCP registration"
 msgstr "Mevcut bir IDA MCP kaydını bağlayın"
@@ -3978,7 +3978,7 @@ msgstr "Mevcut bir IDA MCP kaydını bağlayın"
 #. {ph2}: <code>env</code>
 #. {ph3}: <code>mcpServers</code>
 #. {ph4}: <code>ida-pro-mcp</code>
-#: website/public/get-started/index.html:724
+#: website/public/get-started/index.html:726
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid ""
@@ -3990,13 +3990,13 @@ msgstr ""
 "dosyasında saklayın. {ph3} girdisi olan varolan bir {ph4} nesnesi de kabul "
 "edilir. Kurulumdan önce REA dosyasını bu dosyaya yönlendirin:"
 
-#: website/public/get-started/index.html:733
+#: website/public/get-started/index.html:735
 msgctxt "page:get-started/index.html"
 msgid "IDA connection · Windows PowerShell"
 msgstr "IDA bağlantısı * Windows PowerShell"
 
 #. {ph0}: <code>"mode": "headless"</code>
-#: website/public/get-started/index.html:748
+#: website/public/get-started/index.html:750
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid ""
@@ -4013,7 +4013,7 @@ msgstr ""
 
 #. {ph0}: <code>--provider ida</code>
 #. {ph1}: <code>REA_IDA_MCP_CONFIG</code>
-#: website/public/get-started/index.html:757
+#: website/public/get-started/index.html:759
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid ""
@@ -4025,30 +4025,30 @@ msgstr ""
 " için, {ph1}REA kayıt ortamına REA_İDA_MCP_CONFİG ekleyin ve ikili dosyayı "
 "açarken IDA öğesini seçin."
 
-#: website/public/get-started/index.html:769
+#: website/public/get-started/index.html:771
 msgctxt "page:get-started/index.html"
 msgid "For an existing Ghidra setup, inspect a function with:"
 msgstr ""
 "Mevcut bir Ghidra kurulumu için aşağıdaki işlevlerden birini inceleyin::"
 
-#: website/public/get-started/index.html:774
+#: website/public/get-started/index.html:776
 msgctxt "page:get-started/index.html"
 msgid "Function analysis"
 msgstr "Fonksiyon analizi"
 
 #. {ph0}: <code>main</code>
-#: website/public/get-started/index.html:787
+#: website/public/get-started/index.html:789
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid "Replace {ph0} with the function name or address you want to inspect."
 msgstr "{ph0} incelemek istediğiniz işlev adı veya adresle değiştirin."
 
-#: website/public/get-started/index.html:792
+#: website/public/get-started/index.html:794
 msgctxt "page:get-started/index.html"
 msgid "How native analysis sessions work"
 msgstr "Makine kodu programları oturumlarının analizi nasıl çalışır?"
 
-#: website/public/get-started/index.html:793
+#: website/public/get-started/index.html:795
 msgctxt "page:get-started/index.html"
 msgid ""
 "Each CLI command imports and analyzes the binary, then closes its session. "
@@ -4061,7 +4061,7 @@ msgstr ""
 
 #. {ph0}: <a href="../guides/native/">
 #. {ph1}: </a>
-#: website/public/get-started/index.html:799
+#: website/public/get-started/index.html:801
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid ""
@@ -4071,18 +4071,18 @@ msgstr ""
 "{ph0}İşlev sonucunun kurtarılmış bir hesaplamaya nasıl yol açtığını görmek "
 "için makine kodu programlarının analizi örneğini izleyin{ph1}."
 
-#: website/public/get-started/index.html:806
+#: website/public/get-started/index.html:808
 msgctxt "page:get-started/index.html"
 msgid "Getting help"
 msgstr "Yardım almak"
 
-#: website/public/get-started/index.html:807
+#: website/public/get-started/index.html:809
 msgctxt "page:get-started/index.html"
 msgid "If your agent doesn't see REA"
 msgstr "Temsilciniz REA'YU görmüyorsa"
 
 #. {ph0}: <code>doctor</code>
-#: website/public/get-started/index.html:808
+#: website/public/get-started/index.html:810
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid ""
@@ -4092,27 +4092,27 @@ msgstr ""
 "Kur'dan sonra istemciyi yeniden başlatın veya yeniden bağlayın. REA "
 "bağlantısını {ph0} kontrol edin; Codex için :"
 
-#: website/public/get-started/index.html:814
+#: website/public/get-started/index.html:816
 msgctxt "page:get-started/index.html"
 msgid "Check one client"
 msgstr "Bir müşteriyi kontrol et"
 
-#: website/public/get-started/index.html:826
+#: website/public/get-started/index.html:828
 msgctxt "page:get-started/index.html"
 msgid "If a provider needs attention"
 msgstr "Bir sağlayıcının dikkat etmesi gerekiyorsa"
 
-#: website/public/get-started/index.html:827
+#: website/public/get-started/index.html:829
 msgctxt "page:get-started/index.html"
 msgid "Check the provider you're using. For Ghidra:"
 msgstr "Kullandığınız sağlayıcıyı kontrol edin. Ghidra için :"
 
-#: website/public/get-started/index.html:830
+#: website/public/get-started/index.html:832
 msgctxt "page:get-started/index.html"
 msgid "Check one provider"
 msgstr "Bir sağlayıcıyı kontrol edin"
 
-#: website/public/get-started/index.html:842
+#: website/public/get-started/index.html:844
 msgctxt "page:get-started/index.html"
 msgid "The report gives the failed check and a suggested next step."
 msgstr "Rapor, başarısız kontrolü ve önerilen bir sonraki adımı verir."
@@ -4121,7 +4121,7 @@ msgstr "Rapor, başarısız kontrolü ve önerilen bir sonraki adımı verir."
 #. {ph1}: </a >
 #. {ph2}: <span>
 #. {ph3}: </span>
-#: website/public/get-started/index.html:844
+#: website/public/get-started/index.html:846
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid ""
@@ -4134,7 +4134,7 @@ msgstr ""
 #. {ph1}: </a >
 #. {ph2}: <span >
 #. {ph3}: </span >
-#: website/public/get-started/index.html:848
+#: website/public/get-started/index.html:850
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid ""
@@ -4148,7 +4148,7 @@ msgstr ""
 #. {ph1}: </a >
 #. {ph2}: <span>
 #. {ph3}: </span>
-#: website/public/get-started/index.html:855
+#: website/public/get-started/index.html:857
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid ""
@@ -4162,7 +4162,7 @@ msgstr ""
 #. {ph1}: </a >
 #. {ph2}: <span>
 #. {ph3}: </span>
-#: website/public/get-started/index.html:859
+#: website/public/get-started/index.html:861
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid ""
@@ -4187,107 +4187,107 @@ msgstr ""
 " Electron uygulamasını inceleyin. Kurulum, ilk sorular ve yerel sağlayıcı "
 "kılavuzları."
 
-#: website/public/get-started/index.html:212
+#: website/public/get-started/index.html:214
 msgctxt "page:get-started/index.html"
 msgid "Copy Node.js version check"
 msgstr "Node.js sürüm kontrolünü kopyalayın"
 
-#: website/public/get-started/index.html:233
+#: website/public/get-started/index.html:235
 msgctxt "page:get-started/index.html"
 msgid "Copy Node.js installation command for Windows"
 msgstr "Windows için Node.js kurulum komutunu kopyalayın"
 
-#: website/public/get-started/index.html:256
+#: website/public/get-started/index.html:258
 msgctxt "page:get-started/index.html"
 msgid "Copy PowerShell execution policy command"
 msgstr "PowerShell yürütme ilkesi komutunu kopyala"
 
-#: website/public/get-started/index.html:272
+#: website/public/get-started/index.html:274
 msgctxt "page:get-started/index.html"
 msgid "Copy Homebrew Node.js installation command"
 msgstr "Homebrew Node.js kurulum komutunu kopyalayın"
 
-#: website/public/get-started/index.html:287
+#: website/public/get-started/index.html:289
 msgctxt "page:get-started/index.html"
 msgid "Copy fnm installation command for macOS"
 msgstr "macOS için fnm kurulum komutunu kopyalayın"
 
-#: website/public/get-started/index.html:302
+#: website/public/get-started/index.html:304
 msgctxt "page:get-started/index.html"
 msgid "Copy Node.js 24 commands for macOS"
 msgstr "macOS için Node.js 24 komutlarını kopyalayın"
 
-#: website/public/get-started/index.html:318
+#: website/public/get-started/index.html:320
 msgctxt "page:get-started/index.html"
 msgid "Copy fnm installation command for Linux"
 msgstr "Linux için fnm kurulum komutunu kopyalayın"
 
-#: website/public/get-started/index.html:337
+#: website/public/get-started/index.html:339
 msgctxt "page:get-started/index.html"
 msgid "Copy Node.js 24 commands for Linux"
 msgstr "Linux için Node.js 24 komutlarını kopyalayın"
 
-#: website/public/get-started/index.html:360
+#: website/public/get-started/index.html:362
 msgctxt "page:get-started/index.html"
 msgid "On this page"
 msgstr "Bu sayfada"
 
-#: website/public/get-started/index.html:369
+#: website/public/get-started/index.html:371
 msgctxt "page:get-started/index.html"
 msgid "REA getting started guide"
 msgstr "REA başlangıç kılavuzu"
 
-#: website/public/get-started/index.html:423
+#: website/public/get-started/index.html:425
 msgctxt "page:get-started/index.html"
 msgid "Copy REA installation prompt"
 msgstr "REA kurulum istemini kopyalayın"
 
-#: website/public/get-started/index.html:469
+#: website/public/get-started/index.html:471
 msgctxt "page:get-started/index.html"
 msgid "Copy agent setup command"
 msgstr "Aracı kurulum komutunu kopyala"
 
-#: website/public/get-started/index.html:545
+#: website/public/get-started/index.html:547
 msgctxt "page:get-started/index.html"
 msgid "Copy JavaScript analysis command"
 msgstr "JavaScript analiz komutunu kopyalayın"
 
-#: website/public/get-started/index.html:604
+#: website/public/get-started/index.html:606
 msgctxt "page:get-started/index.html"
 msgid "Copy CLI installation command"
 msgstr "CLI kurulum komutunu kopyalayın"
 
-#: website/public/get-started/index.html:645
+#: website/public/get-started/index.html:647
 msgctxt "page:get-started/index.html"
 msgid "Copy Ghidra connection for macOS and Linux"
 msgstr "macOS ve Linux için Ghidra bağlantı komutunu kopyala"
 
-#: website/public/get-started/index.html:677
+#: website/public/get-started/index.html:679
 msgctxt "page:get-started/index.html"
 msgid "Copy Ghidra connection for Windows PowerShell"
 msgstr "Windows PowerShell için Ghidra bağlantısını kopyalayın"
 
-#: website/public/get-started/index.html:734
+#: website/public/get-started/index.html:736
 msgctxt "page:get-started/index.html"
 msgid "Copy IDA connection for Windows PowerShell"
 msgstr "Windows PowerShell için IDA bağlantısını kopyalayın"
 
-#: website/public/get-started/index.html:775
+#: website/public/get-started/index.html:777
 msgctxt "page:get-started/index.html"
 msgid "Copy native function analysis command"
 msgstr "Yerel işlev analizi komutunu kopyala"
 
-#: website/public/get-started/index.html:815
+#: website/public/get-started/index.html:817
 msgctxt "page:get-started/index.html"
 msgid "Copy client diagnosis command"
 msgstr "İstemci tanılama komutunu kopyala"
 
-#: website/public/get-started/index.html:831
+#: website/public/get-started/index.html:833
 msgctxt "page:get-started/index.html"
 msgid "Copy provider diagnosis command"
 msgstr "Sağlayıcı tanılama komutunu kopyala"
 
-#: website/public/get-started/index.html:882
+#: website/public/get-started/index.html:884
 msgctxt "page:get-started/index.html"
 msgid "Back to top"
 msgstr "Başa dön"
@@ -5120,7 +5120,7 @@ msgid "{ph0}{ph1}{ph2}{ph3}{ph4}{ph5}{ph6}{ph7}Your coding agent"
 msgstr "{ph0}{ph1}{ph2}{ph3}{ph4}{ph5}{ph6}{ph7}Kodlama aracınız"
 
 #: website/public/guides/javascript/index.html:277
-#: website/public/guides/javascript/index.html:426
+#: website/public/guides/javascript/index.html:427
 msgctxt "page:guides/javascript/index.html"
 msgid "Copy"
 msgstr "Kopyala"
@@ -5221,25 +5221,25 @@ msgstr "Örneği kendiniz analiz edin"
 #. {ph0}: <a class="button" href="../../examples/notes-example.zip"
 #. download="notes-example.zip" >
 #. {ph1}: </a >
-#: website/public/guides/javascript/index.html:380
+#: website/public/guides/javascript/index.html:381
 #, python-brace-format
 msgctxt "page:guides/javascript/index.html"
 msgid "{ph0}Download example ZIP{ph1}"
 msgstr "{ph0}Örnek ZİP dosyasını indirin{ph1}"
 
-#: website/public/guides/javascript/index.html:389
+#: website/public/guides/javascript/index.html:390
 msgctxt "page:guides/javascript/index.html"
 msgid "Browse the six source files"
 msgstr "Altı kaynak dosyaya göz atın"
 
-#: website/public/guides/javascript/index.html:425
+#: website/public/guides/javascript/index.html:426
 msgctxt "page:guides/javascript/index.html"
 msgid "Static application analysis"
 msgstr "Statik uygulama analizi"
 
 #. {ph0}: <code>normalized_result.summary.ipc</code>
 #. {ph1}: <code>normalized_result.graph</code>
-#: website/public/guides/javascript/index.html:438
+#: website/public/guides/javascript/index.html:439
 #, python-brace-format
 msgctxt "page:guides/javascript/index.html"
 msgid ""
@@ -5250,7 +5250,7 @@ msgstr ""
 " IPC kanalı ve bir eşleşen işleyici bulmalısınız{ph0}. Kaynak konumları "
 "normalized_result {ph1}."
 
-#: website/public/guides/javascript/index.html:444
+#: website/public/guides/javascript/index.html:445
 msgctxt "page:guides/javascript/index.html"
 msgid ""
 "For your own app, use the same command with its directory or ASAR path. An "
@@ -5261,13 +5261,13 @@ msgstr ""
 "aracı, REA'NUN özellik izleme araçlarıyla değişmez bir dizeyi, API adını "
 "veya IPC kanalını takip edebilir."
 
-#: website/public/guides/javascript/index.html:451
+#: website/public/guides/javascript/index.html:452
 msgctxt "page:guides/javascript/index.html"
 msgid "Inspect the CSV writer"
 msgstr "CSV yazıcısını inceleyin"
 
 #. {ph0}: <code>notes:export</code>
-#: website/public/guides/javascript/index.html:453
+#: website/public/guides/javascript/index.html:454
 #, python-brace-format
 msgctxt "page:guides/javascript/index.html"
 msgid ""
@@ -5277,7 +5277,7 @@ msgstr ""
 "{ph0}. Hangi girdiler CSV yazıcısına ulaşır ve dosyayı yazmak başarısız "
 "olursa ne olur?"
 
-#: website/public/guides/javascript/index.html:459
+#: website/public/guides/javascript/index.html:460
 msgctxt "page:guides/javascript/index.html"
 msgid ""
 "Use the source locations to inspect those details. Computed channel names "
@@ -5292,7 +5292,7 @@ msgstr ""
 #. {ph1}: </a >
 #. {ph2}: <span>
 #. {ph3}: </span>
-#: website/public/guides/javascript/index.html:465
+#: website/public/guides/javascript/index.html:466
 #, python-brace-format
 msgctxt "page:guides/javascript/index.html"
 msgid ""
@@ -5306,7 +5306,7 @@ msgstr ""
 #. {ph1}: </a >
 #. {ph2}: <span >
 #. {ph3}: </span >
-#: website/public/guides/javascript/index.html:471
+#: website/public/guides/javascript/index.html:472
 #, python-brace-format
 msgctxt "page:guides/javascript/index.html"
 msgid ""
@@ -5320,7 +5320,7 @@ msgstr ""
 #. {ph1}: </a >
 #. {ph2}: <span >
 #. {ph3}: </span >
-#: website/public/guides/javascript/index.html:477
+#: website/public/guides/javascript/index.html:478
 #, python-brace-format
 msgctxt "page:guides/javascript/index.html"
 msgid ""
@@ -5361,12 +5361,12 @@ msgctxt "page:guides/javascript/index.html"
 msgid "Copy example prompt"
 msgstr "Örnek istemi kopyala"
 
-#: website/public/guides/javascript/index.html:426
+#: website/public/guides/javascript/index.html:427
 msgctxt "page:guides/javascript/index.html"
 msgid "Copy static application analysis"
 msgstr "Statik uygulama analizini kopyala"
 
-#: website/public/guides/javascript/index.html:503
+#: website/public/guides/javascript/index.html:504
 msgctxt "page:guides/javascript/index.html"
 msgid "Back to top"
 msgstr "Başa dön"
@@ -11701,11 +11701,11 @@ msgstr "Rehberler"
 #: website/public/blog/touhou-reconstruction/index.html:1072
 #: website/public/examples/dino-lab/index.html:467
 #: website/public/faq/index.html:565
-#: website/public/first-investigation/index.html:515
-#: website/public/get-started/index.html:874
+#: website/public/first-investigation/index.html:516
+#: website/public/get-started/index.html:876
 #: website/public/guides/browser/index.html:499
 #: website/public/guides/index.html:274
-#: website/public/guides/javascript/index.html:495
+#: website/public/guides/javascript/index.html:496
 #: website/public/guides/native/index.html:501 website/public/index.html:1183
 #: website/public/showcase/aegis/index.html:800
 #: website/public/showcase/ctf/index.html:769
@@ -11722,11 +11722,11 @@ msgstr "Kaynak kod"
 #: website/public/blog/touhou-reconstruction/index.html:1073
 #: website/public/examples/dino-lab/index.html:468
 #: website/public/faq/index.html:566
-#: website/public/first-investigation/index.html:516
-#: website/public/get-started/index.html:875
+#: website/public/first-investigation/index.html:517
+#: website/public/get-started/index.html:877
 #: website/public/guides/browser/index.html:500
 #: website/public/guides/index.html:275
-#: website/public/guides/javascript/index.html:496
+#: website/public/guides/javascript/index.html:497
 #: website/public/guides/native/index.html:502 website/public/index.html:1184
 #: website/public/showcase/aegis/index.html:801
 #: website/public/showcase/ctf/index.html:770
@@ -11743,11 +11743,11 @@ msgstr "MIT lisansı"
 #: website/public/blog/touhou-reconstruction/index.html:1074
 #: website/public/examples/dino-lab/index.html:469
 #: website/public/faq/index.html:567
-#: website/public/first-investigation/index.html:517
-#: website/public/get-started/index.html:876
+#: website/public/first-investigation/index.html:518
+#: website/public/get-started/index.html:878
 #: website/public/guides/browser/index.html:501
 #: website/public/guides/index.html:276
-#: website/public/guides/javascript/index.html:497
+#: website/public/guides/javascript/index.html:498
 #: website/public/guides/native/index.html:503 website/public/index.html:1185
 #: website/public/showcase/aegis/index.html:802
 #: website/public/showcase/ctf/index.html:771
@@ -11764,11 +11764,11 @@ msgstr "Topluluğa katıl"
 #: website/public/blog/touhou-reconstruction/index.html:1075
 #: website/public/examples/dino-lab/index.html:470
 #: website/public/faq/index.html:568
-#: website/public/first-investigation/index.html:518
-#: website/public/get-started/index.html:877
+#: website/public/first-investigation/index.html:519
+#: website/public/get-started/index.html:879
 #: website/public/guides/browser/index.html:502
 #: website/public/guides/index.html:277
-#: website/public/guides/javascript/index.html:498
+#: website/public/guides/javascript/index.html:499
 #: website/public/guides/native/index.html:504 website/public/index.html:1186
 #: website/public/showcase/aegis/index.html:803
 #: website/public/showcase/ctf/index.html:772
@@ -11785,12 +11785,12 @@ msgctxt "page:examples/dino-lab/index.html"
 msgid "REA · selected script source"
 msgstr "REA * seçilen komut dosyası kaynağı"
 
-#: website/public/first-investigation/index.html:374
+#: website/public/first-investigation/index.html:375
 msgctxt "page:first-investigation/index.html"
 msgid "Source"
 msgstr "Kaynak kod"
 
-#: website/public/first-investigation/index.html:428
+#: website/public/first-investigation/index.html:429
 msgctxt "page:first-investigation/index.html"
 msgid "Expected formatter output"
 msgstr "Beklenen biçimlendirici çıktısı"
@@ -12254,7 +12254,7 @@ msgstr ""
 #. {ph4}: </span >
 #. {ph5}: <span class="terminal-cursor" aria-hidden="true">
 #. {ph6}: </span>
-#: website/public/first-investigation/index.html:243
+#: website/public/first-investigation/index.html:244
 #, python-brace-format
 msgctxt "page:first-investigation/index.html"
 msgid ""
@@ -12275,7 +12275,7 @@ msgstr ""
 #. {ph5}: </span >
 #. {ph6}: <span class="terminal-cursor" aria-hidden="true">
 #. {ph7}: </span>
-#: website/public/first-investigation/index.html:293
+#: website/public/first-investigation/index.html:294
 #, python-brace-format
 msgctxt "page:first-investigation/index.html"
 msgid ""
@@ -12296,7 +12296,7 @@ msgstr ""
 #. {ph4}: </span >
 #. {ph5}: <span class="terminal-cursor" aria-hidden="true">
 #. {ph6}: </span>
-#: website/public/get-started/index.html:432
+#: website/public/get-started/index.html:434
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid ""
@@ -12362,26 +12362,6 @@ msgstr ""
 "{ph0} ve npm kullanılabilir, kurulumu çalıştırın, kodlama aracınızı seçin ve"
 " önerilen değişiklikleri gözden geçirin."
 
-#. {ph0}: <span translate="no">Node.js</span>
-#: website/public/first-investigation/index.html:202
-#, python-brace-format
-msgctxt "page:first-investigation/index.html"
-msgid "A supplied example · {ph0} and npm · Your coding agent"
-msgstr "Verilen bir örnek * {ph0} ve npm * Kodlama aracınız"
-
-#. {ph0}: <span translate="no">Node.js</span>
-#. {ph1}: <a href="../get-started/">
-#. {ph2}: </a >
-#: website/public/first-investigation/index.html:221
-#, python-brace-format
-msgctxt "page:first-investigation/index.html"
-msgid ""
-"Use a coding agent such as Claude Code, Codex or Cursor. You’ll need {ph0} "
-"and npm; the {ph1}setup guide lists supported versions{ph2}."
-msgstr ""
-"Claude Code, Codex veya Cursor gibi bir kodlama aracısı kullanın. {ph0} ve "
-"npm; {ph1}kurulum kılavuzu desteklenen sürümleri listeler{ph2}."
-
 #. {ph0}: <span class="flow-label" >
 #. {ph1}: <span translate="no">renderer.js</span>
 #. {ph2}: </span >
@@ -12390,7 +12370,7 @@ msgstr ""
 #. {ph5}: <span class="flow-note" >
 #. {ph6}: <code>notes.exportCsv()</code>
 #. {ph7}: </span >
-#: website/public/first-investigation/index.html:339
+#: website/public/first-investigation/index.html:340
 #, python-brace-format
 msgctxt "page:first-investigation/index.html"
 msgid "{ph0}Page · {ph1}{ph2}{ph3}Export notes{ph4}{ph5}Calls {ph6}.{ph7}"
@@ -12405,7 +12385,7 @@ msgstr ""
 #. {ph5}: </span >
 #. {ph6}: <span class="flow-note" >
 #. {ph7}: </span >
-#: website/public/first-investigation/index.html:347
+#: website/public/first-investigation/index.html:348
 #, python-brace-format
 msgctxt "page:first-investigation/index.html"
 msgid ""
@@ -12424,7 +12404,7 @@ msgstr ""
 #. {ph6}: <span class="flow-note" >
 #. {ph7}: <code>csv.js</code>
 #. {ph8}: </span >
-#: website/public/first-investigation/index.html:355
+#: website/public/first-investigation/index.html:356
 #, python-brace-format
 msgctxt "page:first-investigation/index.html"
 msgid ""
@@ -12435,7 +12415,7 @@ msgstr ""
 "dosyayı yazar.{ph8}"
 
 #. {ph0}: <span translate="no">main.js</span>
-#: website/public/first-investigation/index.html:373
+#: website/public/first-investigation/index.html:374
 #, python-brace-format
 msgctxt "page:first-investigation/index.html"
 msgid "{ph0} · lines 8–12"
@@ -12450,7 +12430,7 @@ msgstr "{ph0} * satır 8-12"
 #. {ph6}: </span >
 #. {ph7}: <span class="terminal-cursor" aria-hidden="true">
 #. {ph8}: </span>
-#: website/public/first-investigation/index.html:415
+#: website/public/first-investigation/index.html:416
 #, python-brace-format
 msgctxt "page:first-investigation/index.html"
 msgid ""
@@ -12463,7 +12443,7 @@ msgstr ""
 " çalıştırın. Tahmini ve gerçek çıktıyı gösterin.{ph6}{ph7}{ph8}"
 
 #. {ph0}: <span translate="no">Node.js</span>
-#: website/public/first-investigation/index.html:433
+#: website/public/first-investigation/index.html:434
 #, python-brace-format
 msgctxt "page:first-investigation/index.html"
 msgid ""
@@ -12474,25 +12454,14 @@ msgstr ""
 "biçimlendiriciyi doğrudan {ph0} ile kontrol eder."
 
 #. {ph0}: <span translate="no">Node.js</span>
-#: website/public/first-investigation/index.html:446
+#: website/public/first-investigation/index.html:447
 #, python-brace-format
 msgctxt "page:first-investigation/index.html"
 msgid "{ph0} · CSV formatter"
 msgstr "{ph0} * CSV biçimlendirici"
 
 #. {ph0}: <span translate="no">Node.js</span>
-#. {ph1}: <span translate="no">Node.js</span>
-#: website/public/get-started/index.html:200
-#, python-brace-format
-msgctxt "page:get-started/index.html"
-msgid ""
-"You'll need {ph0} 22 (22.19+), 24 (24.11+) or 26+. npm comes with {ph1}."
-msgstr ""
-"İhtiyacın {ph0}olacak 22 (22.19+), 24 (24.11+) veya 26+.  npm ile birlikte "
-"gelir{ph1}."
-
-#. {ph0}: <span translate="no">Node.js</span>
-#: website/public/get-started/index.html:205
+#: website/public/get-started/index.html:207
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid "Don't have {ph0}, or not sure?"
@@ -12500,7 +12469,7 @@ msgstr "{ph0} yok mu, emin değil misiniz?"
 
 #. {ph0}: <code>node -v</code>
 #. {ph1}: <span translate="no">Node.js</span>
-#: website/public/get-started/index.html:224
+#: website/public/get-started/index.html:226
 #, python-brace-format
 msgctxt "page:get-started/index.html"
 msgid ""
@@ -12543,19 +12512,6 @@ msgstr "{ph0}Örneği açın{ph1} * {ph2}İndir {ph3}{ph4}* {ph5}İndir{ph6}{ph7
 msgctxt "page:guides/javascript/index.html"
 msgid "{ph0} · example source"
 msgstr "{ph0} * örnek kaynak"
-
-#. {ph0}: <code>notes-example</code>
-#. {ph1}: <span translate="no">Node.js</span>
-#: website/public/guides/javascript/index.html:374
-#, python-brace-format
-msgctxt "page:guides/javascript/index.html"
-msgid ""
-"Download the example and unzip it. The archive contains the complete {ph0} "
-"folder. Analyze it with {ph1} and npm; Electron is not needed for this "
-"example."
-msgstr ""
-"Örneği indirin ve fermuarını açın. Arşiv, eksiksiz {ph0} klasörünü içerir. "
-"{ph1} ve npm; Bu örnek için Electron gerekli değildir."
 
 #. {ph0}: <span translate="no">Node.js</span>
 #. {ph1}: <a href="get-started/">
@@ -14087,6 +14043,106 @@ msgid ""
 msgstr ""
 "{ph0}Ayrıntılı kanıt notları{ph1}, kaydedilen karşılaştırmaları ve "
 "deneylerin bağlamını içerir."
+
+#. {ph0}: <span translate="no">Node.js</span>
+#. {ph1}: <span translate="no">Node.js</span>
+#. {ph2}: <code>procps</code>
+#. {ph3}: <code>ps</code>
+#: website/public/get-started/index.html:200
+#, python-brace-format
+msgctxt "page:get-started/index.html"
+msgid ""
+"You'll need {ph0} 22 (22.19+), 24 (24.11+) or 26+. npm comes with {ph1}. On "
+"Linux, JavaScript analysis also requires {ph2}-compatible {ph3}."
+msgstr ""
+"İhtiyacın {ph0}olacak 22 (22.19+), 24 (24.11+) veya 26+.  npm ile birlikte "
+"gelir{ph1}. Linux'ta JavaScript analizi için {ph2} uyumlu {ph3} de gerekir."
+
+#. {ph0}: <code>notes-example</code>
+#. {ph1}: <span translate="no">Node.js</span>
+#. {ph2}: <code>procps</code>
+#. {ph3}: <code>ps</code>
+#: website/public/guides/javascript/index.html:374
+#, python-brace-format
+msgctxt "page:guides/javascript/index.html"
+msgid ""
+"Download the example and unzip it. The archive contains the complete {ph0} "
+"folder. Analyze it with {ph1} and npm; Electron is not needed for this "
+"example. On Linux, JavaScript analysis also requires {ph2}-compatible {ph3}."
+msgstr ""
+"Örneği indirin ve fermuarını açın. Arşiv, eksiksiz {ph0} klasörünü içerir. "
+"{ph1} ve npm; Bu örnek için Electron gerekli değildir. Linux'ta JavaScript "
+"analizi için {ph2} uyumlu {ph3} de gerekir."
+
+#. {ph0}: <span translate="no">Node.js</span>
+#. {ph1}: <a href="../get-started/">
+#. {ph2}: </a >
+#. {ph3}: <code>procps</code>
+#. {ph4}: <code>ps</code>
+#: website/public/first-investigation/index.html:221
+#, python-brace-format
+msgctxt "page:first-investigation/index.html"
+msgid ""
+"Use a coding agent such as Claude Code, Codex or Cursor. You’ll need {ph0} "
+"and npm; the {ph1}setup guide lists supported versions{ph2}. On Linux, "
+"JavaScript analysis also requires {ph3}-compatible {ph4}."
+msgstr ""
+"Claude Code, Codex veya Cursor gibi bir kodlama aracısı kullanın. {ph0} ve "
+"npm; {ph1}kurulum kılavuzu desteklenen sürümleri listeler{ph2}. Linux'ta "
+"JavaScript analizi için {ph3} uyumlu {ph4} de gerekir."
+
+#. {ph0}: <span translate="no">Node.js</span>
+#. {ph1}: <code>procps</code>
+#: website/public/first-investigation/index.html:202
+#, python-brace-format
+msgctxt "page:first-investigation/index.html"
+msgid ""
+"A supplied example · {ph0} and npm · {ph1} on Linux · Your coding agent"
+msgstr "Verilen bir örnek * {ph0} ve npm * Kodlama aracınız · Linux’ta {ph1}"
+
+#, python-brace-format
+#~ msgctxt "page:first-investigation/index.html"
+#~ msgid "A supplied example · {ph0} and npm · {ph1} · Your coding agent"
+#~ msgstr "Verilen bir örnek * {ph0} ve npm * Kodlama aracınız · {ph1}"
+
+#, python-brace-format
+#~ msgctxt "page:first-investigation/index.html"
+#~ msgid ""
+#~ "A supplied example · {ph0} and npm · {ph1}-compatible {ph2} on Linux · Your "
+#~ "coding agent"
+#~ msgstr ""
+
+#, python-brace-format
+#~ msgctxt "page:first-investigation/index.html"
+#~ msgid "A supplied example · {ph0} and npm · Your coding agent"
+#~ msgstr "Verilen bir örnek * {ph0} ve npm * Kodlama aracınız"
+
+#, python-brace-format
+#~ msgctxt "page:first-investigation/index.html"
+#~ msgid ""
+#~ "Use a coding agent such as Claude Code, Codex or Cursor. You’ll need {ph0} "
+#~ "and npm; the {ph1}setup guide lists supported versions{ph2}."
+#~ msgstr ""
+#~ "Claude Code, Codex veya Cursor gibi bir kodlama aracısı kullanın. {ph0} ve "
+#~ "npm; {ph1}kurulum kılavuzu desteklenen sürümleri listeler{ph2}."
+
+#, python-brace-format
+#~ msgctxt "page:get-started/index.html"
+#~ msgid ""
+#~ "You'll need {ph0} 22 (22.19+), 24 (24.11+) or 26+. npm comes with {ph1}."
+#~ msgstr ""
+#~ "İhtiyacın {ph0}olacak 22 (22.19+), 24 (24.11+) veya 26+.  npm ile birlikte "
+#~ "gelir{ph1}."
+
+#, python-brace-format
+#~ msgctxt "page:guides/javascript/index.html"
+#~ msgid ""
+#~ "Download the example and unzip it. The archive contains the complete {ph0} "
+#~ "folder. Analyze it with {ph1} and npm; Electron is not needed for this "
+#~ "example."
+#~ msgstr ""
+#~ "Örneği indirin ve fermuarını açın. Arşiv, eksiksiz {ph0} klasörünü içerir. "
+#~ "{ph1} ve npm; Bu örnek için Electron gerekli değildir."
 
 #~ msgctxt "page:blog/index.html"
 #~ msgid "By N0zoM1z0 · 13 October 2026 · Draft for review"

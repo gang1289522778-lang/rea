@@ -175,6 +175,12 @@ Additional tools and host support depend on the target:
 | Packages and resources | File inventories, digests, plists, Apple bundle anatomy and extracted resources      | [Artifact and JavaScript guide](docs/javascript-artifact-reconstruction.md), [Apple applications](docs/apple-application-analysis.md) |
 | Process behavior       | Terminal output, interactions, exit and filesystem observations, and run comparisons | Linux/macOS with a native PTY; [process capture](docs/process-capture.md)                                                             |
 
+On Linux, workflows that launch REA-owned child processes require a
+procps-compatible `ps` on REA's `PATH` for process ownership inspection. This
+shared prerequisite applies across providers, including Ghidra, JADX, firmware
+tools, and JavaScript/Electron analysis. Recovery steps are in
+`docs/installation.md` under "Linux owned-process prerequisite".
+
 Static JavaScript and .NET inspection read the supplied files without running
 the application. Runtime capture runs or interacts with the selected target
 using your user permissions; each runtime guide describes its effects.
