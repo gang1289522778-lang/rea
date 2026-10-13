@@ -1,3 +1,4 @@
+import type { ClientRegistrationDialect } from "./ClientConfigurationDocument.js";
 import type { DoctorReport, DoctorScope, runDoctor } from "./Doctor.js";
 import type { LinuxDistribution } from "./LinuxHopper.js";
 import type { SkillDestination, SkillInstallResult } from "./SetupSkill.js";
@@ -40,10 +41,16 @@ export type ClientConfigurationResult =
 
 /** Read-only state used to block unsafe setup plans before any mutation. */
 export type ClientConfigurationInspection =
-  | { readonly status: "already_current" }
+  | {
+      readonly status: "already_current";
+      /** Dialect the registration writer will use when this file is parsed. */
+      readonly dialect?: ClientRegistrationDialect;
+    }
   | {
       readonly status: "create" | "update";
       readonly backupPath?: string;
+      /** Dialect the registration writer will use for this file. */
+      readonly dialect?: ClientRegistrationDialect;
     }
   | {
       readonly status: "invalid";

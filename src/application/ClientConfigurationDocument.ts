@@ -23,7 +23,9 @@ import {
 } from "jsonc-parser";
 import { z } from "zod";
 
+import { MCP_STARTUP_POLICY } from "../mcpStartupPolicy.js";
 import { PRODUCT_IDENTITY } from "../identity.js";
+import { registrationFieldAccepted } from "./ClientRegistrationShape.js";
 import type { SetupClient } from "./SupportedClients.js";
 import { compareUnicodeCodePoints } from "../domain/unicodeCodePointOrder.js";
 
@@ -1498,6 +1500,141 @@ export const clientRegistrationEntry = (
         ...(Object.keys(environment).length === 0 ? {} : { env: environment }),
       };
   }
+};
+
+/**
+ * Launcher and transport keys REA owns in its entry. A key absent from REA's
+ * new entry is removed, so a stale `type: "http"` cannot outlive the stdio
+ * registration and an emptied environment map is not left behind.
+ */
+const REGISTRATION_LAUNCHER_KEYS: Readonly<Record<string, true>> = {
+  command: true,
+  args: true,
+  env: true,
+  environment: true,
+  type: true,
+  transport: true,
+};
+
+/** Remote-server keys that contradict the local command entry REA writes. */
+const REGISTRATION_REMOTE_KEYS: Readonly<Record<string, true>> = {
+  url: true,
+  httpUrl: true,
+  serverUrl: true,
+  headers: true,
+  http_headers: true,
+  env_http_headers: true,
+  bearer_token_env_var: true,
+  oauth: true,
+  // Codex serializes `--oauth-resource` as `oauth_resource` and rejects it on
+  // a command entry (`oauth_resource is not supported for stdio`).
+  oauth_resource: true,
+  // Qwen treats `tcp` as a websocket endpoint and prefers it over `command`,
+  // so a command entry that still has `tcp` stays remote.
+  tcp: true,
+};
+
+/** Grok registration status ignores the entry `disabled` flag. */
+const keepsGrokDisabledFlag = (dialect: ClientRegistrationDialect): boolean =>
+  dialect === "grok";
+
+/**
+ * Copilot rewrites `tools` as a string array. Other clients do not: Codex
+ * expects a map and rejects a sequence (`invalid type: sequence, expected a map`).
+ */
+const keepsCopilotTools = (dialect: ClientRegistrationDialect): boolean =>
+  dialect === "copilot_cli";
+
+/**
+ * Whether setup replaces or removes an existing entry key. Setup registers an
+ * active server, so entry-level switches that turn it off are removed too,
+ * including ZCode's native `enable: false`. A registration-status field that
+ * does not parse is removed as well, using the same schemas doctor uses, so
+ * setup cannot report success for a value doctor will reject. Grok Build's
+ * boolean entry `disabled` is kept.
+ */
+const registrationManagedKey = (
+  dialect: ClientRegistrationDialect,
+  key: string,
+  value: unknown,
+): boolean =>
+  Object.hasOwn(REGISTRATION_LAUNCHER_KEYS, key) ||
+  Object.hasOwn(REGISTRATION_REMOTE_KEYS, key) ||
+  !registrationFieldAccepted(dialect, key, value) ||
+  (key === "tools" && !keepsCopilotTools(dialect)) ||
+  (key === "enabled" && value === false) ||
+  (key === "enable" && value === false && dialect === "zcode") ||
+  (key === "disabled" && value === true && !keepsGrokDisabledFlag(dialect));
+
+/**
+ * Apply REA's new entry over an existing local command entry. REA's keys take
+ * their new values in place, and every other key the user added (for example
+ * OMP `timeout` or Codex `tool_timeout_sec`) is kept. An existing entry without
+ * a `command` is a remote server, which REA replaces whole.
+ */
+export const retainClientRegistrationFields = (
+  dialect: ClientRegistrationDialect,
+  existing: unknown,
+  registration: Readonly<Record<string, unknown>>,
+): Record<string, unknown> => {
+  const current = objectSchema.safeParse(existing);
+  if (!current.success || !Object.hasOwn(current.data, "command"))
+    return { ...registration };
+  const retained = Object.fromEntries(
+    Object.entries(current.data).flatMap(([key, value]): [string, unknown][] =>
+      Object.hasOwn(registration, key)
+        ? [[key, registration[key]]]
+        : registrationManagedKey(dialect, key, value)
+          ? []
+          : [[key, value]],
+    ),
+  );
+  return { ...retained, ...registration };
+};
+
+/** Codex and Grok Build always receive REA's startup timeout. */
+export const applyRegistrationStartupTimeout = (
+  clientName: string,
+  registration: Readonly<Record<string, unknown>>,
+): Record<string, unknown> =>
+  clientName === "codex" || clientName === "grok_build"
+    ? {
+        ...registration,
+        startup_timeout_sec: MCP_STARTUP_POLICY.codexStartupTimeoutSeconds,
+      }
+    : { ...registration };
+
+/**
+ * Approval-plan text for the retention rules above. Rewritten keys are the
+ * ones the fresh entry sets beyond its launcher, so the sentence cannot name
+ * a field the writer does not replace.
+ */
+export const describeClientRegistrationRetention = (
+  clientName: string,
+  dialect: ClientRegistrationDialect,
+): string => {
+  const replaced = Object.entries(
+    applyRegistrationStartupTimeout(
+      clientName,
+      clientRegistrationEntry(dialect, ["rea", "mcp"], {}),
+    ),
+  )
+    .filter(([key]) => !Object.hasOwn(REGISTRATION_LAUNCHER_KEYS, key))
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => `${key} with ${JSON.stringify(value)}`);
+  const removed = keepsGrokDisabledFlag(dialect)
+    ? "Remote-server keys, an enabled: false switch, and registration fields that do not parse are removed. A boolean disabled value is kept."
+    : "Remote-server keys, switches that turn the server off, and registration fields that do not parse are removed.";
+  const tools = keepsCopilotTools(dialect) ? "" : " A tools value is removed.";
+  const replacement =
+    replaced.length === 0
+      ? `${removed}${tools}`
+      : `Setup replaces ${replaced.join(" and ")}. ${removed}${tools}`;
+  const legacy =
+    dialect === "opencode_v2"
+      ? " A legacy OpenCode entry moved into the native server table keeps only its environment."
+      : "";
+  return `On an existing local command entry, other user fields are kept. ${replacement} When that entry is remote, its other fields are replaced.${legacy}`;
 };
 
 /** Parse one Gemini policy at its source boundary before consolidating scopes. */

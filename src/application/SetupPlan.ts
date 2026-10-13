@@ -1,5 +1,10 @@
 import { join } from "node:path";
 
+import {
+  describeClientRegistrationRetention,
+  type ClientRegistrationDialect,
+} from "./ClientConfigurationDocument.js";
+import { describeDshRegistrationRetention } from "./DshCordisPatch.js";
 import { isOwnedClientRegistrationCommand } from "./ClientRegistrationIdentity.js";
 import {
   linuxHopperInstallDisclosure,
@@ -178,6 +183,9 @@ export const planSetupActions = async (input: {
             inspection.backupPath !== undefined
               ? { backupPath: inspection.backupPath }
               : {}),
+            ...(inspection.dialect === undefined
+              ? {}
+              : { dialect: inspection.dialect }),
           },
         ]
       : [],
@@ -216,6 +224,7 @@ const setupPlan = (input: {
     readonly client: SetupClient;
     readonly operation: "create" | "update";
     readonly backupPath?: string;
+    readonly dialect?: ClientRegistrationDialect;
   }[];
   readonly providerEnvironment: SetupProviderEnvironment;
   readonly linuxPackageFamily?: LinuxPackageFamily;
@@ -253,13 +262,18 @@ const setupPlan = (input: {
     : []),
   ...input.clients
     .filter(({ client }) => client.format !== "unsupported")
-    .map(({ client, operation, backupPath }): SetupAction => ({
+    .map(({ client, operation, backupPath, dialect }): SetupAction => ({
       id: `configure_client:${client.name}`,
       kind: "configure_client",
       label: client.displayName ?? client.name,
       target: client.configPath,
       detail: clientConfigurationDetail(
-        client.displayName ?? client.name,
+        {
+          name: client.name,
+          label: client.displayName ?? client.name,
+          format: client.format,
+          ...(dialect === undefined ? {} : { dialect }),
+        },
         input.command,
         input.providerEnvironment,
         input.installHopper,
@@ -303,7 +317,12 @@ const majorVersion = (version: string): number =>
   Number.parseInt(version.split(".")[0] ?? "0", 10);
 
 const clientConfigurationDetail = (
-  client: string,
+  client: {
+    readonly name: string;
+    readonly label: string;
+    readonly format: SetupClient["format"];
+    readonly dialect?: ClientRegistrationDialect;
+  },
   command: readonly string[],
   environment: SetupProviderEnvironment,
   installHopper: boolean,
@@ -311,14 +330,23 @@ const clientConfigurationDetail = (
   const entries = Object.entries(environment)
     .sort(([left], [right]) => compareUnicodeCodePoints(left, right))
     .map(([name, value]) => `${name}=${value}`);
+  const dialect =
+    client.dialect ??
+    (client.format === undefined || client.format === "unsupported"
+      ? "json"
+      : client.format);
+  const retainedFields =
+    dialect === "dsh"
+      ? describeDshRegistrationRetention(command)
+      : describeClientRegistrationRetention(client.name, dialect);
   const environmentDetail =
     entries.length === 0
-      ? " No additional provider environment variables. Existing server environment overrides are retained."
-      : ` Detected provider environment: ${entries.join(", ")}. Existing server environment overrides are retained; detected values replace matching keys.`;
+      ? ` No additional provider environment variables. Existing server environment overrides are retained. ${retainedFields}`
+      : ` Detected provider environment: ${entries.join(", ")}. Existing server environment overrides are retained; detected values replace matching keys. ${retainedFields}`;
   const hopperDetail = installHopper
     ? environment.HOPPER_LAUNCHER_PATH === undefined
       ? " If this plan installs Hopper, REA will add HOPPER_LAUNCHER_PATH using the launcher path reported by that installation."
       : " The HOPPER_LAUNCHER_PATH value shown above is the current fallback; if this plan installs Hopper, REA will replace it with the launcher path reported by that installation."
     : "";
-  return `Add the REA MCP registration for ${client}; preserve unrelated configuration. The backup path reflects the configuration inspected for this plan; if that file changes before execution, setup will select a recovery path for its current contents. Command: ${command.map((part) => JSON.stringify(part)).join(" ")}.${environmentDetail}${hopperDetail}`;
+  return `Add the REA MCP registration for ${client.label}; preserve unrelated configuration. The backup path reflects the configuration inspected for this plan; if that file changes before execution, setup will select a recovery path for its current contents. Command: ${command.map((part) => JSON.stringify(part)).join(" ")}.${environmentDetail}${hopperDetail}`;
 };

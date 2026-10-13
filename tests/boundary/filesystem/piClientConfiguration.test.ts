@@ -281,7 +281,7 @@ describe("Pi strict JSON parsing", () => {
     });
     expect(
       await inspectClientConfiguration(client, {}, NPX_REGISTRATION_COMMAND),
-    ).toEqual({ status: "create" });
+    ).toEqual({ status: "create", dialect: "pi" });
     expect(
       await configureClientConfiguration(client, {}, NPX_REGISTRATION_COMMAND),
     ).toMatchObject({ status: "configured" });

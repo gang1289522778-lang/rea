@@ -68,7 +68,7 @@ it.each([
     );
     expect(
       await inspectClientConfiguration(client, providers, command),
-    ).toEqual({ status: "already_current" });
+    ).toEqual({ status: "already_current", dialect: format });
     expect(
       await configureClientConfiguration(client, providers, command),
     ).toEqual({ status: "unchanged" });

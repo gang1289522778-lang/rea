@@ -50,6 +50,7 @@ describe.each([
       expect(await inspectClientConfiguration(client, {}, command)).toEqual({
         status: "update",
         backupPath: `${client.configPath}.rea.backup`,
+        dialect: client.format,
       });
       expect(await clientConfigurationAligned(client, {}, command)).toBe(false);
       expect(await configureClientConfiguration(client, {}, command)).toEqual({
@@ -73,6 +74,7 @@ describe.each([
       expect(await clientConfigurationAligned(client, {}, command)).toBe(true);
       expect(await inspectClientConfiguration(client, {}, command)).toEqual({
         status: "already_current",
+        dialect: client.format,
       });
       expect(
         await readClientRegistrationStatuses(home, currentCommandPath, {
@@ -174,6 +176,7 @@ it.each(["", "\n  \n", "\uFEFF"])(
     expect(await inspectClientConfiguration(client, {}, command)).toEqual({
       status: "update",
       backupPath: `${client.configPath}.rea.backup`,
+      dialect: "json",
     });
     expect(await configureClientConfiguration(client, {}, command)).toEqual({
       status: "configured",
@@ -184,6 +187,7 @@ it.each(["", "\n  \n", "\uFEFF"])(
     });
     expect(await inspectClientConfiguration(client, {}, command)).toEqual({
       status: "already_current",
+      dialect: "json",
     });
   },
 );

@@ -5,6 +5,7 @@ import {
 } from "./ClientConfigurationFiles.js";
 import { err, ok, type Result } from "../domain/result.js";
 import {
+  applyRegistrationStartupTimeout,
   clientRegistrationEntry,
   clientConfigurationValuesEqual,
   clientServerListedDisabled,
@@ -13,9 +14,11 @@ import {
   OMP_DISABLED_SERVERS_KEY,
   parseClientConfiguration,
   parseZcodeFallbackConfiguration,
+  retainClientRegistrationFields,
   serializeClientConfiguration,
   withClientServers,
   type ClientConfigurationDocument,
+  type ClientRegistrationDialect,
 } from "./ClientConfigurationDocument.js";
 import { dshDocument, DshCordisDocument } from "./DshCordisPatch.js";
 import { constants as fsConstants } from "node:fs";
@@ -27,7 +30,6 @@ import { clientRegistrationEnvironment } from "./ClientRegistrationEnvironment.j
 
 import { PRODUCT_IDENTITY } from "../identity.js";
 import { npxRegistrationCommand } from "./ClientRegistrationIdentity.js";
-import { MCP_STARTUP_POLICY } from "../mcpStartupPolicy.js";
 import { resolveClientConfigTransactionPath } from "./ClientConfigPath.js";
 import {
   readRegularFile,
@@ -414,7 +416,7 @@ export const inspectClientConfiguration = async (
         throwCleanupFailure(fallback.error);
         return { status: "invalid", remediation: fallback.error.detail };
       }
-      return { status: "create" };
+      return { status: "create", dialect: clientRegistrationDialect(client) };
     }
     return {
       status: "invalid",
@@ -444,12 +446,26 @@ export const inspectClientConfiguration = async (
       parsed,
     );
     if (registrationCurrent(parsed, desired))
-      return { status: "already_current" };
+      return { status: "already_current", dialect: parsed.dialect };
     const fallback = await readZcodeFallbackServers(client, parsed);
     if (!fallback.ok) {
       throwCleanupFailure(fallback.error);
       return { status: "invalid", remediation: fallback.error.detail };
     }
+    const backupSelection = await selectCurrentRecoveryBackup(
+      `${client.configPath}.rea.backup`,
+      original,
+    );
+    if (!backupSelection.ok)
+      return {
+        status: "invalid",
+        remediation: backupSelection.error.detail,
+      };
+    return {
+      status: "update",
+      backupPath: backupSelection.value.backupPath,
+      dialect: parsed.dialect,
+    };
   } catch (cause: unknown) {
     if (cause instanceof RegularFileCleanupFailure) throw cause;
     // Malformed configuration is reported with the invalid remediation.
@@ -460,20 +476,14 @@ export const inspectClientConfiguration = async (
         "The existing configuration is malformed. Repair it before setup applies any other changes.",
     };
   }
-  const backupSelection = await selectCurrentRecoveryBackup(
-    `${client.configPath}.rea.backup`,
-    original,
-  );
-  if (!backupSelection.ok)
-    return {
-      status: "invalid",
-      remediation: backupSelection.error.detail,
-    };
-  return {
-    status: "update",
-    backupPath: backupSelection.value.backupPath,
-  };
 };
+
+const clientRegistrationDialect = (
+  client: SetupClient,
+): ClientRegistrationDialect =>
+  client.format === undefined || client.format === "unsupported"
+    ? "json"
+    : client.format;
 
 const isMissing = (cause: unknown): boolean =>
   cause instanceof Error && "code" in cause && cause.code === "ENOENT";
@@ -669,17 +679,17 @@ const clientConfigurationDesired = (
     providerEnvironment,
   );
   if (!environment.ok) throw environment.error;
-  const registration = clientRegistrationEntry(
-    format,
-    launcher,
-    environment.value,
+  const registration = applyRegistrationStartupTimeout(
+    client.name,
+    clientRegistrationEntry(format, launcher, environment.value),
   );
-  return {
-    ...registration,
-    ...(client.name === "codex" || client.name === "grok_build"
-      ? {
-          startup_timeout_sec: MCP_STARTUP_POLICY.codexStartupTimeoutSeconds,
-        }
-      : {}),
-  };
+  // Keep fields the user added to REA's own entry, such as OMP `timeout`. A
+  // legacy OpenCode V1 entry migrating into a V2 table keeps only its
+  // environment, because its other fields belong to the V1 shape. The approval
+  // plan states that exception through describeClientRegistrationRetention.
+  return retainClientRegistrationFields(
+    format,
+    parsed?.servers[PRODUCT_IDENTITY.mcpServerKey],
+    registration,
+  );
 };

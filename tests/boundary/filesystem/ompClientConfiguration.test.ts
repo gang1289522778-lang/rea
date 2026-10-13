@@ -168,4 +168,49 @@ describe("OMP disabledServers denylist", () => {
     expect(await status()).toMatchObject({ state: "invalid" });
     expect(join(home, ".omp", "agent", "mcp.json")).toBe(client.configPath);
   });
+
+  it("keeps the entry's timeout through setup and reports it aligned", async () => {
+    const { home, client } = await ompClient();
+    const entry = resolve("scripts/rea.mjs");
+    const current = [process.execPath, entry, "mcp"];
+    const env = { REA_MCP_INPUT_SCHEMA_PROFILE: "compact" };
+    await writeFile(
+      client.configPath,
+      JSON.stringify({
+        mcpServers: {
+          rea: {
+            type: "stdio",
+            command: join(home, "old", "bun"),
+            args: [join(home, "old", "rea.mjs"), "mcp"],
+            env,
+            timeout: 0,
+          },
+        },
+      }),
+    );
+    expect(
+      (await configureClientConfiguration(client, {}, current)).status,
+    ).toBe("configured");
+    const configured = await readFile(client.configPath, "utf8");
+    expect(parseJsonc(configured)).toEqual({
+      mcpServers: {
+        rea: {
+          type: "stdio",
+          command: process.execPath,
+          args: [entry, "mcp"],
+          env,
+          timeout: 0,
+        },
+      },
+    });
+    expect(await configureClientConfiguration(client, {}, current)).toEqual({
+      status: "unchanged",
+    });
+    expect(await readFile(client.configPath, "utf8")).toBe(configured);
+    expect(
+      (
+        await readClientRegistrationStatuses(home, entry, { environment: {} })
+      ).find(({ client: name }) => name === "omp"),
+    ).toMatchObject({ state: "aligned", remediation: null });
+  });
 });

@@ -46,6 +46,7 @@ it("previews and creates a current recovery backup while preserving the first ba
   expect(await inspectClientConfiguration(client, {}, ["rea", "mcp"])).toEqual({
     status: "update",
     backupPath: recoveryPath,
+    dialect: "json",
   });
 
   expect(
