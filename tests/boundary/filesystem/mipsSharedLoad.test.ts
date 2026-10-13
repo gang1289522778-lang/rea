@@ -62,6 +62,7 @@ const resolve = async (bytes: Buffer) => {
   assert.equal(result.value.architecture, "mips");
   if (
     result.value.kind !== "executable" ||
+    result.value.format !== "elf" ||
     result.value.architecture !== "mips"
   )
     throw new Error("expected MIPS ELF");

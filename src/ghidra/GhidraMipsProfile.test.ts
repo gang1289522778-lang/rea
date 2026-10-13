@@ -32,7 +32,9 @@ const host: GhidraInstallationHost = {
 const parsed = parseConfig({ GHIDRA_INSTALL_DIR: "/ghidra" });
 if (!parsed.ok) throw parsed.error;
 const config = parsed.value;
-const target = (change: Partial<MipsElfMetadata> = {}): BinaryTarget => ({
+const target = (
+  change: Partial<MipsElfMetadata> = {},
+): Extract<BinaryTarget, { format: "elf"; architecture: "mips" }> => ({
   path: "/fixture.elf",
   sha256: "a".repeat(64),
   kind: "executable",
@@ -299,7 +301,11 @@ describe("MIPS16 shared-image profile", () => {
     "refuses an uninspected %s declaration",
     (declaration) => {
       const value = shared();
-      if (value.kind !== "executable" || value.architecture !== "mips")
+      if (
+        value.kind !== "executable" ||
+        value.format !== "elf" ||
+        value.architecture !== "mips"
+      )
         throw new Error("expected MIPS target");
       const facts = { ...value.mips };
       delete facts[declaration];

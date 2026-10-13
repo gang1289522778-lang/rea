@@ -150,6 +150,14 @@ export const resolveGhidraAnalysisProfile = async (
       }),
     );
   }
+  if (target.format === "psx-exe" && languageOverride !== undefined)
+    return err(
+      new AnalysisUnsupportedTargetError(
+        "resolve_analysis_profile",
+        target.path,
+        "PS-X EXE has a bound little-endian MIPS interpretation and does not accept language overrides.",
+      ),
+    );
   const dosMz = target.format === "dos-mz";
   const dosCom = target.format === "dos-com";
   const dos = dosMz || dosCom;
@@ -274,6 +282,19 @@ export const resolveGhidraAnalysisProfile = async (
           : {}),
         ...analyzerParameters,
         ...ghidraMipsProfileParameters(target),
+        ...(target.format === "psx-exe"
+          ? {
+              psx_exe: { ...target.psx },
+              mips_support_lane: "psx-exe-r3000a-static-v1",
+              loader: "BinaryLoader",
+              language_id: "MIPS:LE:32:default",
+              compiler_spec_id: "default",
+              file_offset: 2048,
+              entry_seed: "psx-header-entry-gp-sp-bss-v1",
+              processor_limitations:
+                "generic-mips-decoder-no-gte-or-load-delay-execution",
+            }
+          : {}),
         ...ghidraRiscvProfileParameters(target),
         ...(pspExtension?.ok === true
           ? {

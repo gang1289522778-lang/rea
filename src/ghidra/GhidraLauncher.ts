@@ -1,3 +1,4 @@
+import type { PsxExeHeader } from "../domain/psxExe.js";
 import { parseGhidraJavaProperties } from "./GhidraJavaProperties.js";
 import {
   GHIDRA_SEED_SCRIPT,
@@ -155,6 +156,7 @@ export interface GhidraHeadlessLauncherOptions {
   /** Select the admitted 16-bit real-mode MZ import instead of auto-detection. */
   readonly dosMz?: true;
   readonly dosCom?: true;
+  readonly psx?: PsxExeHeader;
   readonly rawBinary?: {
     readonly languageId: string;
     readonly compilerSpecId: string;
@@ -272,6 +274,7 @@ export class GhidraHeadlessLauncher implements GhidraLauncher {
         ...(this.options.dosMz === undefined
           ? {}
           : { dosMz: this.options.dosMz }),
+        ...(this.options.psx === undefined ? {} : { psx: this.options.psx }),
         ...(this.options.rawBinary === undefined
           ? {}
           : { rawBinary: this.options.rawBinary }),
@@ -534,6 +537,7 @@ export interface GhidraHeadlessArgumentOptions {
   readonly mipsSoftFloat?: true;
   readonly dosMz?: true;
   readonly dosCom?: true;
+  readonly psx?: PsxExeHeader;
   readonly rawBinary?: {
     readonly languageId: string;
     readonly compilerSpecId: string;
@@ -598,60 +602,80 @@ export const ghidraHeadlessArguments = (
     throw new Error(
       "A raw-binary import cannot be combined with a DOS import.",
     );
+  if (
+    options.psx !== undefined &&
+    (options.dosCom ||
+      options.dosMz ||
+      options.psp ||
+      rawBinary !== undefined ||
+      override !== undefined)
+  )
+    throw new Error(
+      "PS-X EXE import cannot be combined with another loader profile.",
+    );
+  const importArguments: string[] = [];
+  if (options.psx !== undefined)
+    importArguments.push(
+      "-loader",
+      "BinaryLoader",
+      "-loader-baseAddr",
+      "0",
+      "-processor",
+      "MIPS:LE:32:default",
+      "-cspec",
+      "default",
+    );
+  else if (options.dosMz === true)
+    importArguments.push(
+      "-loader",
+      "MzLoader",
+      "-processor",
+      "x86:LE:16:Real Mode",
+      "-cspec",
+      "default",
+    );
+  else if (options.dosCom === true)
+    importArguments.push(
+      "-loader",
+      "BinaryLoader",
+      "-loader-baseAddr",
+      "1000:0100",
+      "-processor",
+      "x86:LE:16:Real Mode",
+      "-cspec",
+      "default",
+    );
+  else if (rawBinary !== undefined)
+    importArguments.push(
+      "-loader",
+      "BinaryLoader",
+      "-loader-baseAddr",
+      rawBinary.baseAddr,
+      "-processor",
+      rawBinary.languageId,
+      "-cspec",
+      rawBinary.compilerSpecId,
+    );
+  else if (options.psp === true)
+    importArguments.push(
+      "-loader",
+      "PspElfLoader",
+      "-processor",
+      "Allegrex:LE:32:default",
+      "-cspec",
+      "default",
+    );
+  else if (override !== undefined) {
+    importArguments.push("-processor", override.languageId);
+    if (override.compilerSpecId !== undefined)
+      importArguments.push("-cspec", override.compilerSpecId);
+  }
   return [
     options.projectRoot,
     "rea-project",
     "-import",
     options.targetPath,
-    ...(options.dosMz === true
-      ? [
-          "-loader",
-          "MzLoader",
-          "-processor",
-          "x86:LE:16:Real Mode",
-          "-cspec",
-          "default",
-        ]
-      : options.dosCom === true
-        ? [
-            "-loader",
-            "BinaryLoader",
-            "-loader-baseAddr",
-            "1000:0100",
-            "-processor",
-            "x86:LE:16:Real Mode",
-            "-cspec",
-            "default",
-          ]
-        : rawBinary === undefined
-          ? options.psp === true
-            ? [
-                "-loader",
-                "PspElfLoader",
-                "-processor",
-                "Allegrex:LE:32:default",
-                "-cspec",
-                "default",
-              ]
-            : override !== undefined
-              ? [
-                  "-processor",
-                  override.languageId,
-                  ...(override.compilerSpecId === undefined
-                    ? []
-                    : ["-cspec", override.compilerSpecId]),
-                ]
-              : []
-          : [
-              "-loader",
-              "BinaryLoader",
-              "-loader-baseAddr",
-              rawBinary.baseAddr,
-              "-processor",
-              rawBinary.languageId,
-              "-cspec",
-              rawBinary.compilerSpecId,
-            ]),
+    ...importArguments,
     "-readOnly",
     "-deleteProject",
     "-log",
@@ -673,6 +697,22 @@ export const ghidraHeadlessArguments = (
           scriptPath.join(bridgeDirectory, "ReaGhidraPrepareRaw.java"),
           rawBinary.languageId,
           rawBinary.baseAddr,
+        ]),
+    ...(options.psx === undefined
+      ? []
+      : [
+          "-preScript",
+          scriptPath.join(bridgeDirectory, "ReaGhidraPreparePsx.java"),
+          ...[
+            options.psx.loadAddress,
+            options.psx.payloadSize,
+            options.psx.entryPoint,
+            options.psx.globalPointer,
+            options.psx.stackBase,
+            options.psx.stackOffset,
+            options.psx.bssAddress,
+            options.psx.bssSize,
+          ].map(String),
         ]),
     // Seeds follow any loader preparation and precede default auto-analysis.
     ...(options.seedPath === undefined

@@ -49,6 +49,7 @@ const subjectSchema = z.strictObject({
     "pe",
     "dos-mz",
     "dos-com",
+    "psx-exe",
     "raw-binary",
     "zip",
     "ipa",

@@ -195,7 +195,9 @@ public final class ReaGhidraBridge extends HeadlessScript {
         if (currentProgram.getExecutableFormat().equals("Raw Binary")) {
             boolean dosCom = currentProgram.getLanguageID().getIdAsString()
                 .equals("x86:LE:16:Real Mode");
-            String preparation = dosCom ? "REA DOS COM prepared" : "REA raw binary prepared";
+            String preparation = dosCom ? "REA DOS COM prepared" :
+                currentProgram.getLanguageID().getIdAsString().equals("MIPS:LE:32:default") ?
+                    "REA PS-X EXE prepared" : "REA raw binary prepared";
             if (!currentProgram.getOptions(ghidra.program.model.listing.Program.PROGRAM_INFO)
                 .getBoolean(preparation, false)) {
                 throw new IllegalStateException(
@@ -590,11 +592,12 @@ public final class ReaGhidraBridge extends HeadlessScript {
             JsonObject context = new JsonObject();
             context.addProperty("address", canonicalAddress(entry));
             JsonArray registers = new JsonArray();
-            for (String name : new String[] { "CS", "DS", "ES", "SS" }) {
+            for (String name : new String[] { "CS", "DS", "ES", "SS", "gp", "sp", "fp" }) {
                 Register register = currentProgram.getRegister(name);
+                if (register == null && name.equals("fp")) register = currentProgram.getRegister("s8");
                 if (register == null) continue;
                 JsonObject row = new JsonObject();
-                row.addProperty("name", name);
+                row.addProperty("name", register.getName());
                 BigInteger value = currentProgram.getProgramContext().getValue(register, entry, false);
                 row.add("value_hex", value == null ? JsonNull.INSTANCE : GSON.toJsonTree("0x" + value.toString(16)));
                 registers.add(row);

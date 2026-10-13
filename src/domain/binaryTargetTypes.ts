@@ -1,3 +1,4 @@
+import type { PsxExeHeader } from "./psxExe.js";
 import type { ZipPackageFormat } from "./zipPackageFormat.js";
 
 /** Provider-neutral CPU families detected from supported executable headers. */
@@ -113,6 +114,15 @@ type ExecutableTarget = BinaryTargetIdentity & {
  * Each variant carries only metadata established for that exact file kind.
  */
 export type BinaryTarget =
+  | (BinaryTargetIdentity & {
+      readonly kind: "executable";
+      readonly format: "psx-exe";
+      readonly architecture: "mips";
+      readonly availableArchitectures: readonly "mips"[];
+      readonly psx: PsxExeHeader;
+      readonly executableRole?: never;
+      readonly managed?: never;
+    })
   | (BinaryTargetIdentity & {
       readonly kind: "executable";
       readonly format: "elf";

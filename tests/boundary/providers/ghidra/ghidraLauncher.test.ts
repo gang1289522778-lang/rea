@@ -612,3 +612,45 @@ describe("Ghidra Windows launcher", () => {
     },
   );
 });
+
+describe("Ghidra PS-X EXE loader", () => {
+  it("preserves the complete file and passes distinct entry, payload and register declarations before analysis", () => {
+    const args = ghidraHeadlessArguments({
+      projectRoot: "/tmp/project",
+      targetPath: "/tmp/SCUS_000.00",
+      bridgeScriptPath: "/package/bridge/ReaGhidraBridge.java",
+      descriptorPath: "/tmp/session.json",
+      ghidraLogPath: "/tmp/ghidra.log",
+      scriptLogPath: "/tmp/script.log",
+      psx: {
+        loadAddress: 0x80010000,
+        payloadSize: 2048,
+        entryPoint: 0x80010010,
+        globalPointer: 0x80010100,
+        stackBase: 0x801fff00,
+        stackOffset: 240,
+        bssAddress: 0x80010800,
+        bssSize: 64,
+        dataAddress: 0,
+        dataSize: 0,
+      },
+    });
+    expectOptions(args, [
+      ["-loader", "BinaryLoader"],
+      ["-loader-baseAddr", "0"],
+      ["-processor", "MIPS:LE:32:default"],
+      ["-cspec", "default"],
+    ]);
+    const pre = args.indexOf("-preScript");
+    expect(args.slice(pre + 1, pre + 10)).toEqual([
+      join("/package/bridge", "ReaGhidraPreparePsx.java"),
+      ...[
+        0x80010000, 2048, 0x80010010, 0x80010100, 0x801fff00, 240, 0x80010800,
+        64,
+      ].map(String),
+    ]);
+    expect(pre).toBeLessThan(args.indexOf("-postScript"));
+    expect(args).not.toContain("-loader-fileOffset");
+    expect(args).toContain("-deleteProject");
+  });
+});

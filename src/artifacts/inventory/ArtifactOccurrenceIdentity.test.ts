@@ -1,3 +1,4 @@
+import { classifyArtifactBytes } from "./ArtifactGraphConstruction.js";
 import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -233,4 +234,12 @@ describe("directly selected executable formats", () => {
       expect(embedded).toEqual(direct);
     },
   );
+});
+
+it("preserves PS-X signature identity in inventory without high-bit ASCII aliases", () => {
+  const bytes = Buffer.alloc(2048);
+  bytes.write("PS-X EXE");
+  expect(classifyArtifactBytes(bytes, 4096)).toBe("psx-exe");
+  Buffer.from("d0d3add8a0c5d8c5", "hex").copy(bytes);
+  expect(classifyArtifactBytes(bytes, 4096)).not.toBe("psx-exe");
 });

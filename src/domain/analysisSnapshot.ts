@@ -56,6 +56,7 @@ const formatSchema = z.enum([
   "pe",
   "dos-mz",
   "dos-com",
+  "psx-exe",
   "raw-binary",
   "zip",
   "ipa",

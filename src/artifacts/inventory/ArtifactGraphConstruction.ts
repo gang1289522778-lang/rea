@@ -1,3 +1,4 @@
+import { hasPsxExeSignature } from "../../domain/psxExe.js";
 import { compareUnicodeCodePoints } from "../../domain/unicodeCodePointOrder.js";
 import { digestCanonicalValue } from "../../domain/canonicalDigest.js";
 import { hasBinaryPlistSignature } from "../../domain/apple/appleArchiveFormat.js";
@@ -440,6 +441,7 @@ export const classifyArtifactBytes = (
   prefix: Buffer,
   fileSize = prefix.length,
 ): ArtifactNode["format"] => {
+  if (hasPsxExeSignature(prefix)) return "psx-exe";
   if (hasZipSignature(prefix)) return "zip";
   if (hasBinaryPlistSignature(prefix)) return "plist";
   const fatFormat = classifyFatArtifact(prefix, fileSize);

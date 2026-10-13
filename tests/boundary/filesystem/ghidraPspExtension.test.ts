@@ -344,7 +344,8 @@ describe.skipIf(process.platform === "win32")(
       if (!parsed.ok) throw parsed.error;
       if (
         parsed.value.kind !== "executable" ||
-        parsed.value.architecture !== "mips"
+        parsed.value.architecture !== "mips" ||
+        parsed.value.format !== "elf"
       )
         throw new Error("PSP ELF was not recognized as MIPS");
       expect(parsed.value.mips.abiFlags).toEqual(pspAbiFlags);

@@ -156,6 +156,7 @@ export const hopperLoaderArgsForTarget = (
     case "dos-mz":
     case "dos-com":
     case "raw-binary":
+    case "psx-exe":
       return err(
         new ProviderAdapterError("hopper", "resolve_analysis_profile"),
       );
