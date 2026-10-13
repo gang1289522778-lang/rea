@@ -135,6 +135,7 @@ REA 需要 Node.js 22.x（>=22.19）、24.x（>=24.11）或 26+，以及 npm。�
 | 原生二进制文件        | 伪代码、汇编、字符串、符号、调用和引用                        | Hopper、Ghidra 或 IDA；[原生分析](https://rea.tools/zh-CN/guides/native/)                                              |
 | 离线 ELF 布局         | 节、段、原始符号/重定位信息及静态防护机制候选项               | Linux x64 上由调用方提供的 pwntools；[二进制诊断](docs/binary-diagnostics.md)                                          |
 | EVM 字节码            | 分派选择器、字节偏移、推断的参数和状态可变性                  | Linux x64 上的本地原始字节/十六进制输入载体；[离线 EVM 指南](docs/evm-bytecode.md)                                     |
+| Rust binaries         | Embedded cargo-auditable dependency list                      | [Rust binaries](docs/rust-binaries.md)                                                                                 |
 | 已记录的 Linux 崩溃   | 原始 note 记录、每个已记录线程的寄存器/信号及可选的映射候选项 | Linux x64 上由调用方提供的 pwntools；可选的 GDB/pwndbg；[已记录崩溃](docs/recorded-crashes.md)                         |
 | JavaScript / Electron | 模块、导入、source map、路由、IPC 和原生扩展关系              | Node.js 和 npm；[应用分析](https://rea.tools/zh-CN/guides/javascript/)                                                 |
 | 网站                  | 页面结构、脚本、网络观察结果和按请求获取的截图                | Chrome 系浏览器；[浏览器分析](https://rea.tools/zh-CN/guides/browser/)                                                 |
