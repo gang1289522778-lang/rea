@@ -50,6 +50,28 @@ const fixture = async (
   return { root, target, producer, client };
 };
 
+it.each(["attached", "headless"] as const)(
+  "%s document inventory returns a public path accepted by later operations",
+  async (mode) => {
+    const { target, client } = await fixture(mode);
+    try {
+      const documents = await client.execute("list_documents", {});
+      if (!documents.ok) throw documents.error;
+      expect(documents.value.result).toEqual([target.path]);
+      const procedures = await client.execute("list_procedures", {
+        document: target.path,
+      });
+      expect(procedures.ok).toBe(true);
+      const strings = await client.execute("list_strings", {
+        document: target.path,
+      });
+      expect(strings.ok).toBe(true);
+    } finally {
+      await client.close();
+    }
+  },
+);
+
 describe("headless IDA producer pagination", () => {
   it("follows reported cursors for modern inventories, pseudocode, and bare-hex assembly without losing pages", async () => {
     const { producer, client } = await fixture("headless");

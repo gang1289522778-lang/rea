@@ -525,17 +525,31 @@ export class EnhancedTools {
         this.#call("list_strings", {}, signal),
       ],
     );
-    if (!segmentsResult.ok) return segmentsResult;
     if (!proceduresResult.ok) return proceduresResult;
     if (!stringsResult.ok) return stringsResult;
+    // Segment enumeration is optional: providers without such a facet (for
+    // example the IDA compatibility profiles) keep the overview available and
+    // simply omit the unobserved segments instead of failing the whole tool.
+    if (
+      !segmentsResult.ok &&
+      !(segmentsResult.error instanceof AnalysisCapabilityUnavailableError)
+    )
+      return segmentsResult;
 
-    const segments = parseSegments(segmentsResult.value);
-    if (!segments.ok) return segments;
     const procedureCount = parseListCount(proceduresResult.value, "procedures");
     if (!procedureCount.ok) return procedureCount;
     const stringCount = parseListCount(stringsResult.value, "strings");
     if (!stringCount.ok) return stringCount;
 
+    if (!segmentsResult.ok)
+      return ok({
+        document: document.value,
+        procedure_count: procedureCount.value,
+        string_count: stringCount.value,
+      });
+
+    const segments = parseSegments(segmentsResult.value);
+    if (!segments.ok) return segments;
     const imageBase = parseSegmentImageBase(segments.value);
 
     return ok({

@@ -113,7 +113,7 @@ const ENHANCED_REQUIREMENTS: Readonly<Record<string, readonly string[]>> = {
   analyze_swift_types: ["list_procedures"],
   find_xrefs_to_name: ["list_names", "xrefs"],
   binary_overview: [
-    "list_segments",
+    "list_segments?",
     "list_documents",
     "list_procedures",
     "list_strings",
@@ -641,18 +641,34 @@ const composedAvailability = (
   return composedAvailabilityFor(requirements, descriptors);
 };
 
-const composedAvailabilityFor = (
+/**
+ * Requirement entries may end with `?` to mark an optional facet: the composed
+ * tool stays available without it and reports the gap through its own output
+ * limitations instead of failing provider selection.
+ */
+const optionalRequirement = (operation: string): boolean =>
+  operation.endsWith("?");
+
+const requirementOperation = (operation: string): string =>
+  optionalRequirement(operation) ? operation.slice(0, -1) : operation;
+
+export const composedAvailabilityFor = (
   requirements: readonly string[],
   descriptors: ReadonlyMap<string, ProviderDescriptor>,
 ): Availability => {
-  const missing = requirements.find((operation) => !descriptors.has(operation));
+  const required = requirements.filter(
+    (operation) => !optionalRequirement(operation),
+  );
+  const missing = required.find(
+    (operation) => !descriptors.has(requirementOperation(operation)),
+  );
   if (missing !== undefined)
     return {
       reason: "provider_missing",
-      remediation: `Configure a provider for required operation ${missing}.`,
+      remediation: `Configure a provider for required operation ${requirementOperation(missing)}.`,
     };
-  const unavailable = requirements
-    .map((operation) => descriptors.get(operation))
+  const unavailable = required
+    .map((operation) => descriptors.get(requirementOperation(operation)))
     .find((descriptor) => descriptor?.available === false);
   if (unavailable !== undefined)
     return {

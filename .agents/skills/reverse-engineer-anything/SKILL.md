@@ -155,8 +155,10 @@ leaves its database open. The modern headless profile creates and closes an
 owned private database without saving. Installation and registration reuse
 [mrexodia/ida-pro-mcp](https://github.com/mrexodia/ida-pro-mcp); see the
 [IDA provider guide](https://github.com/morluto/rea/blob/main/docs/ida-provider.md).
-Proceed directly to `analyze_function`, pseudocode, or function/string searches
-after opening; IDA does not supply `binary_overview`. Consult session availability
+After opening, `binary_overview` reports the admitted document identity and
+procedure/string counts. Segment inventory is unavailable through this adapter,
+so segment fields and image base are omitted as unobserved. Use `analyze_function`, pseudocode, or
+function/string searches for focused questions. Consult session availability
 when composing broader workflows. Modern direct callers and unsupported dossier
 facets remain unknown; live IDA results are not replayed from snapshots.
 

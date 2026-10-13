@@ -102,7 +102,7 @@ export class IdaOperationRunner {
       readonly callGraphAvailable?: boolean;
       /** False when the upstream server does not advertise `survey_binary`. */
       readonly surveyAvailable?: boolean;
-      /** The program identity REA admitted, reported by `list_documents`. */
+      /** Public admitted identity; the headless private copy is an internal resource. */
       readonly admittedDocument?: string;
     } = {},
   ) {}
@@ -593,7 +593,10 @@ export class IdaOperationRunner {
             );
     }
     if (operation === "list_documents") {
-      if (this.options.admittedDocument === undefined)
+      if (
+        this.options.admittedDocument === undefined ||
+        this.options.admittedDocument.length === 0
+      )
         throw new AnalysisProtocolError("The admitted IDA program is unknown.");
       return [this.options.admittedDocument];
     }

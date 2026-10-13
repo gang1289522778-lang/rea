@@ -148,7 +148,7 @@ const found = (query: string, fn: typeof function_) => ({
 });
 
 describe("IDA containment capabilities", () => {
-  it("declares both operations for the headless profile only", () => {
+  it("declares document inventory for all profiles and containment for headless only", () => {
     const declared = (mode: "attached" | "headless", native = false) =>
       idaCapabilities(mode, false, native)
         .map(({ operation }) => operation)
@@ -169,26 +169,23 @@ describe("IDA containment capabilities", () => {
       "both are declared available, not merely listed",
     ).toEqual([true, true]);
     expect(declared("headless")).toEqual([
-      "resolve_containing_procedure",
       "list_documents",
+      "resolve_containing_procedure",
     ]);
-    expect(declared("attached")).toEqual([]);
-    expect(declared("attached", true)).toEqual([]);
+    expect(declared("attached")).toEqual(["list_documents"]);
+    expect(declared("attached", true)).toEqual(["list_documents"]);
     expect(
       idaCapabilities("attached", false).map(({ operation }) => operation),
-      "attached profiles do not even declare them",
-    ).not.toContain("list_documents");
+      "attached profiles do not declare containment",
+    ).not.toContain("resolve_containing_procedure");
   });
 
-  it.each(["resolve_containing_procedure", "list_documents"] as const)(
+  it.each(["resolve_containing_procedure"] as const)(
     "refuses %s on the legacy attached profile without calling upstream",
     async (operation) => {
       const { client, producer } = await session({}, "attached");
       try {
-        const result = await client.execute(
-          operation,
-          operation === "list_documents" ? {} : { address: "0x1000" },
-        );
+        const result = await client.execute(operation, { address: "0x1000" });
 
         expect(result.ok).toBe(false);
         if (!result.ok)

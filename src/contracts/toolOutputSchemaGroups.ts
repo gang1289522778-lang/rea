@@ -358,17 +358,19 @@ export const enhancedOutputSchemas: Readonly<Record<string, z.ZodObject>> = {
     z.object({
       document: z.string(),
       image_base: z.string().min(1).optional(),
-      segments: z.array(
-        z.object({
-          name: z.string(),
-          start: z.string(),
-          end: z.string(),
-          length: z.number().min(0),
-          image_base: z.string().exactOptional(),
-          address_space: z.string().exactOptional(),
-        }),
-      ),
-      segment_count: z.number().int().min(0),
+      segments: z
+        .array(
+          z.object({
+            name: z.string(),
+            start: z.string(),
+            end: z.string(),
+            length: z.number().min(0),
+            image_base: z.string().exactOptional(),
+            address_space: z.string().exactOptional(),
+          }),
+        )
+        .optional(),
+      segment_count: z.number().int().min(0).optional(),
       procedure_count: z.number().int().min(0),
       string_count: z.number().int().min(0),
     }),

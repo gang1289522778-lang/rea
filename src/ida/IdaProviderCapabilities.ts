@@ -12,6 +12,7 @@ export const IDA_PROVIDER_IDENTITY = Object.freeze({
 
 /** Read-only analyst outcomes supported by the upstream compatibility profiles. */
 export const IDA_OPERATIONS = Object.freeze([
+  "list_documents",
   "list_procedures",
   "search_procedures",
   "list_strings",
@@ -25,14 +26,12 @@ export const IDA_OPERATIONS = Object.freeze([
   "xrefs",
   "analyze_function",
   "resolve_containing_procedure",
-  "list_documents",
 ] as const satisfies readonly Exclude<AnalysisOperation, "health">[]);
 export type IdaOperation = (typeof IDA_OPERATIONS)[number];
 
 /** Operations only the modern headless profile implements. */
 const HEADLESS_ONLY_OPERATIONS: ReadonlySet<IdaOperation> = new Set([
   "resolve_containing_procedure",
-  "list_documents",
 ]);
 
 /** Whether the configured profile admits an operation. */
