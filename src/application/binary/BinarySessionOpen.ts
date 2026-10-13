@@ -1,3 +1,4 @@
+import type { ArtifactResourceScope } from "../../artifacts/ArtifactResourceScope.js";
 import type { ExecutableFormatHint } from "../../domain/dosCom.js";
 import type { BinaryArchitecture } from "../../domain/binaryTargetTypes.js";
 import type { AnalysisProviderSelector } from "../../contracts/providerSelection.js";
@@ -25,6 +26,7 @@ export interface BinarySessionOpenOptions {
   readonly formatHint?: ExecutableFormatHint;
   readonly architecture?: BinaryArchitecture;
   readonly entryPoint?: string;
+  readonly dsymPath?: string;
   readonly snapshot?: AnalysisSnapshot;
   readonly providerId?: AnalysisProviderSelector;
 }
@@ -42,6 +44,7 @@ export interface ResolvedSessionOpen {
 }
 
 interface ResolveSessionOpenInput {
+  readonly resources?: ArtifactResourceScope;
   readonly router: SessionProviderRouter;
   readonly current: CurrentOpenBinding | undefined;
   readonly path: string;
@@ -69,6 +72,7 @@ export const resolveSessionOpen = async (
 ): Promise<Result<ResolvedSessionOpen, AnalysisError>> => {
   const { path, options } = input;
   const parsed = await parseBinaryTarget(path, {
+    ...(input.resources === undefined ? {} : { resources: input.resources }),
     ...(options.targetKind === undefined
       ? {}
       : { targetKind: options.targetKind }),
@@ -81,6 +85,7 @@ export const resolveSessionOpen = async (
     ...(options.entryPoint === undefined
       ? {}
       : { entryPoint: options.entryPoint }),
+    ...(options.dsymPath === undefined ? {} : { dsymPath: options.dsymPath }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
   });
   if (!parsed.ok) return parsed;

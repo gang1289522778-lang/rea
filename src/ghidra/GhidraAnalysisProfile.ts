@@ -205,6 +205,19 @@ export const resolveGhidraAnalysisProfile = async (
         available_architectures: [
           ...(target.availableArchitectures ?? []),
         ].sort(),
+        // The committed profile is the Evidence-bearing analysis identity:
+        // a companion-selected run must not share a digest with a bare run.
+        ...((target.format === "mach-o" ||
+          target.format === "mach-o-universal") &&
+        target.debugCompanion !== undefined
+          ? {
+              debug_companion: {
+                source_path: target.debugCompanion.sourcePath,
+                uuid: target.debugCompanion.uuid,
+                member_sha256: target.debugCompanion.memberSha256,
+              },
+            }
+          : {}),
         import_mode: "ephemeral-source-immutable",
         annotation_policy: "atomic-function-entry-metadata-v1",
         load_image_observations: "source-mappings-entry-context-v2",

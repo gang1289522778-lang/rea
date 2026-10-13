@@ -448,6 +448,16 @@ const lifecycleTargetFields = {
 const detectedLifecycleTargetSchema = z.object({
   ...lifecycleTargetFields,
   format: targetFormatSchema.exclude(["raw-binary"]),
+  debug_companion: z
+    .object({
+      source_path: z.string(),
+      uuid: z.string(),
+      member_sha256: z.string(),
+    })
+    .optional()
+    .describe(
+      "Caller-selected dSYM companion admitted for this Mach-O target; present only when one matched.",
+    ),
   architecture: z.enum(BINARY_ARCHITECTURES).exclude(["6502"]).nullable(),
 });
 const rawLifecycleTargetSchema = z.object({

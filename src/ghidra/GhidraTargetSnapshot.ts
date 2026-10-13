@@ -1,15 +1,12 @@
 import { createHash } from "node:crypto";
-import { constants } from "node:fs";
 import { open, rm, type FileHandle } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 
 import type { JsonValue } from "../domain/jsonValue.js";
-import {
-  AnalysisArtifactChangedError,
-  AnalysisAccessDeniedError,
-} from "../domain/analysisErrorCore.js";
+import { AnalysisArtifactChangedError } from "../domain/analysisErrorCore.js";
+import { openGhidraSource } from "./GhidraSourceFile.js";
 import { windowsPrivateRuntime } from "../windows/WindowsPrivateRuntime.js";
 
 /** Immutable target copy admitted to one ephemeral Ghidra import. */
@@ -57,7 +54,7 @@ export const createGhidraTargetSnapshot = async (
   let source: FileHandle | undefined;
   let destination: FileHandle | undefined;
   try {
-    source = await openSnapshotSource(sourcePath);
+    source = await openGhidraSource(sourcePath);
     if (!(await source.stat()).isFile())
       throw new AnalysisArtifactChangedError(
         "open_binary",
@@ -100,26 +97,6 @@ export const createGhidraTargetSnapshot = async (
     throw cause;
   } finally {
     await Promise.all([source?.close(), destination?.close()]);
-  }
-};
-
-const openSnapshotSource = async (path: string): Promise<FileHandle> => {
-  try {
-    // A path replaced by a FIFO must not block startup before its type is checked.
-    return await open(path, constants.O_RDONLY | constants.O_NONBLOCK);
-  } catch (cause: unknown) {
-    const code =
-      cause instanceof Error && "code" in cause ? cause.code : undefined;
-    if (code === "EACCES" || code === "EPERM")
-      throw new AnalysisAccessDeniedError("open_binary", path, code, { cause });
-    if (code === "ENOENT" || code === "ENOTDIR" || code === "ELOOP")
-      throw new AnalysisArtifactChangedError(
-        "open_binary",
-        path,
-        `The selected Ghidra source could not be opened (${code})`,
-        { cause },
-      );
-    throw cause;
   }
 };
 

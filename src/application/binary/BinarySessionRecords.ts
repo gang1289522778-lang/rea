@@ -54,7 +54,7 @@ export interface WorkflowSnapshotRecordInput {
 /** Own binary snapshots and coordinate the composed investigation records. */
 export abstract class BinarySessionRecords {
   readonly #records: InvestigationRecords;
-  readonly #writeResources = new ArtifactResourceScope();
+  protected readonly fileResources = new ArtifactResourceScope();
   readonly #snapshot = new AnalysisSnapshotCache();
   #snapshotInvalidated = false;
   readonly #snapshotListeners = new Set<() => void | Promise<void>>();
@@ -107,18 +107,18 @@ export abstract class BinarySessionRecords {
   ): Promise<
     Result<{ readonly path: string; readonly bytes: number }, AnalysisError>
   > {
-    return writeSnapshotFile(snapshot, path, overwrite, this.#writeResources);
+    return writeSnapshotFile(snapshot, path, overwrite, this.fileResources);
   }
 
-  /** Retry and release staged snapshot files at the owning session shutdown. */
-  async closeWriteResources(): Promise<Result<null, AnalysisError>> {
+  /** Retry retained input and snapshot file owners at session shutdown. */
+  async closeFileResources(): Promise<Result<null, AnalysisError>> {
     try {
-      await this.#writeResources.retryCleanup();
+      await this.fileResources.retryCleanup();
       return ok(null);
     } catch (cause: unknown) {
       const observation = ArtifactReaderFailure.cleanupObservation(
         cause,
-        "analysis snapshot staging",
+        "binary session files",
       );
       return err(
         new EvidenceFileError("write", "io", {
