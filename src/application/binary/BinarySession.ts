@@ -5,7 +5,10 @@ import {
   analysisProfilesEqual,
   type AnalysisProfileCommitment,
 } from "../../domain/analysisProfile.js";
-import { AnalysisCancelledError } from "../../domain/analysisErrorCore.js";
+import {
+  AnalysisCancelledError,
+  AnalysisOutputError,
+} from "../../domain/analysisErrorCore.js";
 import type { AnalysisError } from "../../domain/analysisErrorBase.js";
 import { err, ok, type Result } from "../../domain/result.js";
 import type { JsonValue } from "../../domain/jsonValue.js";
@@ -73,6 +76,7 @@ export class BinarySession
   implements BinarySessionPort
 {
   #active: SessionBinding | undefined;
+  #externalMutationCleanupFailure: AnalysisError | undefined;
   #pendingCleanup:
     | {
         readonly client: AnalysisClient;
@@ -156,6 +160,10 @@ export class BinarySession
     return ![...(capabilities?.values() ?? [])].some(
       ({ cachePolicy }) => cachePolicy === "live",
     );
+  }
+
+  invalidateSnapshotForExternalMutation(): void {
+    this.invalidateSnapshot();
   }
 
   /** Return the selected immutable profile, optionally scoped to an operation. */
@@ -245,108 +253,196 @@ export class BinarySession
     resolve: () => Promise<Result<ResolvedSessionOpen, AnalysisError>>,
     options: Pick<BinarySessionOpenOptions, "signal" | "snapshot">,
   ): Promise<Result<BinaryTarget, AnalysisError>> {
-    return this.#serialize(async (admittedThrough) => {
-      if (isAborted(options.signal))
-        return err(new AnalysisCancelledError("open_binary"));
-      const resolved = await resolve();
-      if (!resolved.ok) return resolved;
-      const { target, route, sameTarget } = resolved.value;
-      const { profile } = route;
-      if (isAborted(options.signal))
-        return err(new AnalysisCancelledError("open_binary"));
-      const activeProfile = this.#active?.profile;
-      const sameProfile =
-        activeProfile === null || activeProfile === undefined
-          ? profile === null
-          : profile !== null && analysisProfilesEqual(activeProfile, profile);
-      await this.#drainCalls(admittedThrough);
-      if (isAborted(options.signal))
-        return err(new AnalysisCancelledError("open_binary"));
-      const pendingClosed = await this.#retryPendingCleanup();
-      if (!pendingClosed.ok) return pendingClosed;
-      if (isAborted(options.signal))
-        return err(new AnalysisCancelledError("open_binary"));
-      const retained = sameTarget && sameProfile ? this.#active : undefined;
-      if (retained !== undefined) {
-        const fastPath = await this.#tryRetainedFastPath(
-          retained,
-          target,
-          options,
-        );
-        if (fastPath !== undefined) return fastPath;
-      }
-      const previous = this.#active;
-      this.#active = undefined;
-      if (previous !== undefined) {
-        const closed = await this.#retireClient(
-          previous.client,
-          previous.route.identity.id,
-        );
-        if (!closed.ok) {
-          this.clearSessionRecords();
-          this.#clearRuntimeAvailability();
-          return closed;
-        }
-      }
-      if (isAborted(options.signal))
-        return err(
-          await this.#restoreAfterFailedOpen(
-            previous,
-            new AnalysisCancelledError("open_binary"),
-          ),
-        );
-      const runId = randomUUID();
-      const client = route.createClient(target, { runId });
-      const started = await client.execute("health", {}, options);
-      if (!started.ok) {
-        return err(
-          await this.#failedOpen(
-            client,
-            route.identity.id,
-            previous,
-            started.error,
-          ),
-        );
-      }
-      if (isAborted(options.signal)) {
-        return err(
-          await this.#failedOpen(
-            client,
-            route.identity.id,
-            previous,
-            new AnalysisCancelledError("open_binary"),
-          ),
-        );
-      }
-      this.#active = {
+    return this.#serialize((admittedThrough) =>
+      this.#openWithinTransition(admittedThrough, resolve, options),
+    );
+  }
+
+  async #openWithinTransition(
+    admittedThrough: number,
+    resolve: () => Promise<Result<ResolvedSessionOpen, AnalysisError>>,
+    options: Pick<BinarySessionOpenOptions, "signal" | "snapshot">,
+  ): Promise<Result<BinaryTarget, AnalysisError>> {
+    if (this.#externalMutationCleanupFailure?.cleanupIncomplete === true)
+      return err(this.#externalMutationCleanupFailure);
+    if (isAborted(options.signal))
+      return err(new AnalysisCancelledError("open_binary"));
+    const resolved = await resolve();
+    if (!resolved.ok) return resolved;
+    const { target, route, sameTarget } = resolved.value;
+    const { profile } = route;
+    if (isAborted(options.signal))
+      return err(new AnalysisCancelledError("open_binary"));
+    const activeProfile = this.#active?.profile;
+    const sameProfile =
+      activeProfile === null || activeProfile === undefined
+        ? profile === null
+        : profile !== null && analysisProfilesEqual(activeProfile, profile);
+    await this.#drainCalls(admittedThrough);
+    if (isAborted(options.signal))
+      return err(new AnalysisCancelledError("open_binary"));
+    const pendingClosed = await this.#retryPendingCleanup();
+    if (!pendingClosed.ok) return pendingClosed;
+    if (isAborted(options.signal))
+      return err(new AnalysisCancelledError("open_binary"));
+    const retained = sameTarget && sameProfile ? this.#active : undefined;
+    if (retained !== undefined) {
+      const fastPath = await this.#tryRetainedFastPath(
+        retained,
         target,
-        client,
-        profile,
-        route,
-        runId,
-        nativeSourceAdmitted: false,
+        options,
+      );
+      if (fastPath !== undefined) return fastPath;
+    }
+    const previous = this.#active;
+    this.#active = undefined;
+    if (previous !== undefined) {
+      const closed = await this.#retireClient(
+        previous.client,
+        previous.route.identity.id,
+      );
+      if (!closed.ok) {
+        this.clearSessionRecords();
+        this.#clearRuntimeAvailability();
+        return closed;
+      }
+    }
+    if (isAborted(options.signal))
+      return err(
+        await this.#restoreAfterFailedOpen(
+          previous,
+          new AnalysisCancelledError("open_binary"),
+        ),
+      );
+    const runId = randomUUID();
+    const client = route.createClient(target, { runId });
+    const started = await client.execute("health", {}, options);
+    if (!started.ok) {
+      return err(
+        await this.#failedOpen(
+          client,
+          route.identity.id,
+          previous,
+          started.error,
+        ),
+      );
+    }
+    if (isAborted(options.signal)) {
+      return err(
+        await this.#failedOpen(
+          client,
+          route.identity.id,
+          previous,
+          new AnalysisCancelledError("open_binary"),
+        ),
+      );
+    }
+    this.#active = {
+      target,
+      client,
+      profile,
+      route,
+      runId,
+      nativeSourceAdmitted: false,
+    };
+    this.#clearRuntimeAvailability();
+    this.resetSnapshotInvalidation();
+    if (options.snapshot === undefined) {
+      if (profile === null) this.clearSnapshot();
+      else this.selectSnapshot(target, profile);
+    }
+    if (options.snapshot !== undefined) {
+      const imported = this.importAnalysisSnapshot(options.snapshot);
+      if (!imported.ok) {
+        this.#active = undefined;
+        return err(
+          await this.#failedOpen(
+            client,
+            route.identity.id,
+            previous,
+            imported.error,
+          ),
+        );
+      }
+    }
+    return ok(target);
+  }
+
+  /** Serialize an external local-file mutation and rebind a matching session. */
+  withAdmittedExternalMutation<Value>(
+    _path: string | undefined,
+    signal: AbortSignal | undefined,
+    operation: () => Promise<Result<Value, AnalysisError>>,
+    rebindFailure: (
+      value: Result<Value, AnalysisError>,
+      error: AnalysisError,
+    ) => AnalysisError,
+    operationName = "execute_rizin_command",
+  ): Promise<Result<Result<Value, AnalysisError>, AnalysisError>> {
+    return this.#serialize(async (admittedThrough) => {
+      if (this.#externalMutationCleanupFailure?.cleanupIncomplete === true)
+        return err(this.#externalMutationCleanupFailure);
+      if (isAborted(signal))
+        return err(new AnalysisCancelledError(operationName));
+      await this.#drainCalls(admittedThrough);
+      if (isAborted(signal))
+        return err(new AnalysisCancelledError(operationName));
+
+      const activeAtDispatch = this.#active;
+      if (activeAtDispatch?.route.identity.id === "ghidra")
+        return err(
+          new AnalysisOutputError(
+            operationName,
+            "Close the active Ghidra session explicitly before an external mutation; rebinding would discard its ephemeral analysis edits.",
+          ),
+        );
+      // External commands are unrestricted: a hard link, symlink alias, plugin,
+      // or command script can mutate the active file through another path.
+      // Rebind every active session after the admitted call rather than infer
+      // file identity with an uncancellable path lookup.
+      this.invalidateSnapshot();
+      const value = await operation();
+      this.#externalMutationCleanupFailure =
+        !value.ok && value.error.cleanupIncomplete ? value.error : undefined;
+      if (activeAtDispatch === undefined) return ok(value);
+
+      const retired = await this.#closeActive({}, false);
+      if (!retired.ok) return err(rebindFailure(value, retired.error));
+      if (this.#externalMutationCleanupFailure !== undefined) return ok(value);
+
+      const target = activeAtDispatch.target;
+      const reopenOptions: BinarySessionOpenOptions = {
+        targetKind: target?.kind,
+        ...(activeAtDispatch?.profile === null ||
+        activeAtDispatch?.profile === undefined
+          ? {}
+          : { providerId: activeAtDispatch.profile.provider.id }),
+        ...(target?.format === "dos-com" || target?.format === "raw-binary"
+          ? { formatHint: target.format }
+          : {}),
+        ...(target?.format === "raw-binary"
+          ? {
+              architecture: target.architecture,
+              entryPoint: target.entryPoint,
+            }
+          : {}),
       };
-      this.#clearRuntimeAvailability();
-      this.resetSnapshotInvalidation();
-      if (options.snapshot === undefined) {
-        if (profile === null) this.clearSnapshot();
-        else this.selectSnapshot(target, profile);
-      }
-      if (options.snapshot !== undefined) {
-        const imported = this.importAnalysisSnapshot(options.snapshot);
-        if (!imported.ok) {
-          this.#active = undefined;
-          return err(
-            await this.#failedOpen(
-              client,
-              route.identity.id,
-              previous,
-              imported.error,
-            ),
-          );
-        }
-      }
-      return ok(target);
+      const reopened = await this.#openWithinTransition(
+        admittedThrough,
+        () =>
+          resolveSessionOpen({
+            router: this.#providerRouter,
+            current: this.#active,
+            path: target.sourcePath ?? target.path,
+            options: reopenOptions,
+            stagedSnapshotMatches: (target, profile) =>
+              this.matchesSnapshot(target, profile),
+          }),
+        reopenOptions,
+      );
+      return reopened.ok
+        ? ok(value)
+        : err(rebindFailure(value, reopened.error));
     });
   }
 
@@ -394,6 +490,7 @@ export class BinarySession
     options: Pick<ExecutionOptions, "progress"> & {
       readonly retainProviderDocuments?: boolean;
     },
+    clearRecords = true,
   ): Promise<Result<null, AnalysisError>> {
     const previous = this.#active;
     this.#active = undefined;
@@ -415,7 +512,7 @@ export class BinarySession
                 : {}),
             },
           );
-    this.clearSessionRecords();
+    if (clearRecords) this.clearSessionRecords();
     this.#clearRuntimeAvailability();
     const fileResources = await this.closeWriteResources();
     if (!closed.ok && !fileResources.ok)

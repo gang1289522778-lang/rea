@@ -48,6 +48,17 @@ export interface BinarySessionPort
     signal: AbortSignal | undefined,
     operation: (analysis: AnalysisOperationPort) => Promise<Value>,
   ): Promise<Result<Value, AnalysisError>>;
+  /** Serialize an external mutation and refresh a target bound to its path. */
+  withAdmittedExternalMutation<Value>(
+    path: string | undefined,
+    signal: AbortSignal | undefined,
+    operation: () => Promise<Result<Value, AnalysisError>>,
+    rebindFailure: (
+      value: Result<Value, AnalysisError>,
+      error: AnalysisError,
+    ) => AnalysisError,
+    operationName?: string,
+  ): Promise<Result<Result<Value, AnalysisError>, AnalysisError>>;
   open(
     path: string,
     options?: {
@@ -82,6 +93,8 @@ export interface BinarySessionPort
     operation?: AnalysisOperation,
   ): AnalysisProfileCommitment | undefined;
   allowsSnapshotReplay(operation: AnalysisOperation): boolean;
+  /** Invalidate cached Evidence before an external command may mutate the target. */
+  invalidateSnapshotForExternalMutation(): void;
   recordWorkflowSnapshot(
     input: WorkflowSnapshotRecordInput,
   ): Result<null, EvidenceIntegrityError>;
