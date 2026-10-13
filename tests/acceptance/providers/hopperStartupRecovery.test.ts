@@ -201,6 +201,63 @@ test("recovers a denied Hopper launch through the same stdio MCP session and CLI
   ).toBe(false);
 });
 
+test("recovers a Spotlight not-found Hopper launch without restarting the MCP session", async ({
+  workspace,
+}) => {
+  const target = workspace.path("target");
+  await copyFile("/usr/bin/true", target);
+  const mode = await workspace.write("mode", "not-found");
+  const receipt = workspace.path("bootstrap-path");
+  const transport = new StdioClientTransport({
+    command: process.execPath,
+    args: [resolve("dist/main.js")],
+    env: {
+      ...workspace.environment,
+      PATH: process.env.PATH ?? "",
+      REA_ANALYSIS_PROVIDER: "hopper",
+      HOPPER_LAUNCHER_PATH: process.execPath,
+      HOPPER_LOADER_ARGS_JSON: JSON.stringify([
+        resolve("tests/fixtures/hopperLaunchAdmission.mjs"),
+        mode,
+        receipt,
+      ]),
+      REA_LOG_LEVEL: "silent",
+    },
+    stderr: "pipe",
+  });
+  const mcp = new Client({ name: "hopper-not-found-recovery", version: "1" });
+  let stderr = "";
+  transport.stderr?.on("data", (chunk: Buffer) => {
+    stderr += chunk.toString();
+  });
+  onTestFinished(async () => {
+    await mcp.close();
+    await transport.close();
+  });
+  await mcp.connect(transport);
+  const call = (name: string, arguments_: Record<string, string> = {}) =>
+    mcp.callTool({ name, arguments: arguments_ }).catch((cause: unknown) => {
+      throw new Error(`${name}: ${stderr}`, { cause });
+    });
+  expect((await call("open_binary", { path: target })).isError).not.toBe(true);
+  const { error } = parseMcpToolError(await call("list_procedures"));
+  expect(error).toMatchObject({
+    code: "provider_unavailable",
+    details: { stage: "launch", launcher: { exit_code: 3 } },
+  });
+  expect(error.message).toContain("Spotlight");
+  const bootstrap = await readFile(receipt, "utf8");
+  await expect(access(dirname(bootstrap))).rejects.toMatchObject({
+    code: "ENOENT",
+  });
+  expect((await call("close_binary")).isError).not.toBe(true);
+
+  await writeFile(mode, "bridge");
+  expect((await call("open_binary", { path: target })).isError).not.toBe(true);
+  expect((await call("current_document")).isError).not.toBe(true);
+  expect((await call("close_binary")).isError).not.toBe(true);
+});
+
 test(
   "preserves a timed-out handoff and closes only a late bridge with matching run identity",
   { timeout: 60_000 },

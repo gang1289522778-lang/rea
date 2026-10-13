@@ -6,6 +6,16 @@ import type { ProviderProcessDiagnostic } from "../process/ProviderProcess.js";
 import { parseLinuxPrivateDisplayDiagnostic } from "./LinuxPrivateDisplayDiagnostic.js";
 import type { HopperLauncherOutcome } from "../domain/hopperErrors.js";
 
+/** Recognize native stderr signatures only with complete, empty stdout. */
+const hasCompleteNativeHelperOutput = (
+  outcome: HopperLauncherOutcome,
+): boolean =>
+  outcome.output_closed &&
+  !outcome.diagnostic_truncated &&
+  outcome.stdout.text === "" &&
+  outcome.stdout.bytes === 0 &&
+  outcome.stdout.retained_bytes === 0;
+
 /**
  * Hopper's native helper sends activate before its open-document Apple event.
  * Recognize its explicit authorization rejection. The launcher must separately
@@ -18,9 +28,25 @@ export const nativeHopperLaunchWasDenied = (
   outcome !== undefined &&
   outcome.exit_code === 2 &&
   outcome.signal === null &&
-  outcome.output_closed &&
-  !outcome.diagnostic_truncated &&
+  hasCompleteNativeHelperOutput(outcome) &&
   /^Cannot launch Hopper!\r?\nNot authorized to send Apple events to [^\r\n]+\.\r?\n?$/u.test(
+    outcome.stderr.text,
+  );
+
+/**
+ * Hopper's native helper locates the application through a fixed Spotlight
+ * bundle-identifier query before any Apple event. Recognize its complete
+ * "not found" report: no document can exist. Caller arguments do not reach
+ * that query. Other output leaves ownership unknown.
+ */
+export const nativeHopperApplicationWasNotFound = (
+  outcome: HopperLauncherOutcome | undefined,
+): outcome is HopperLauncherOutcome =>
+  outcome !== undefined &&
+  outcome.exit_code === 3 &&
+  outcome.signal === null &&
+  hasCompleteNativeHelperOutput(outcome) &&
+  /^Hopper has not been found\.\r?\nPlease make sure that Spotlight is active in order for this tool to find Hopper's executable\.\r?\n?$/u.test(
     outcome.stderr.text,
   );
 
