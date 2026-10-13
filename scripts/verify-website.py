@@ -10,6 +10,7 @@ from urllib.parse import unquote, urlsplit
 import xml.etree.ElementTree as ET
 from zipfile import BadZipFile, ZipFile
 
+from website_i18n import languages
 from website import NOTES_FIXTURES, SITE_ORIGIN, authored_markdown, page_url, sync_pages
 
 LEGACY_ORIGIN = "morluto.github.io"
@@ -44,6 +45,7 @@ def markdown_ids(path):
 
 def check_repository_links(root):
     """Check local links in website Markdown and current-repository source links."""
+    root = root.resolve()
     errors = []
     sources = {}
     for path in authored_markdown(root):
@@ -167,8 +169,9 @@ class HtmlReferences(HTMLParser):
         return bool(set(re.split(r"[\s,]+", directives)) & {"noindex", "none"})
 
 
-def check_search_metadata(site, pages):
+def check_search_metadata(site, pages, inventory):
     """Verify route-specific canonicals, sharing assets and the generated sitemap."""
+    language_by_code = {item["code"]: item for item in inventory}
     errors = []
     indexable = set()
     titles = set()
@@ -178,7 +181,7 @@ def check_search_metadata(site, pages):
         if not title:
             errors.append(f"{label}: needs exactly one nonempty head title")
         first = path.relative_to(site).parts[0]
-        expected_language = first if re.fullmatch(r"[a-z]{2}(?:-[A-Z]{2})?", first) else "en"
+        expected_language = first if first in language_by_code else "en"
         if page.translation_fallback:
             if page.lang != "en" or not page.noindex():
                 errors.append(f"{label}: English translation fallback needs lang=en and noindex")
@@ -186,7 +189,7 @@ def check_search_metadata(site, pages):
             errors.append(f"{label}: needs lang={expected_language} and exactly one h1")
         if page.h1_count != 1:
             errors.append(f"{label}: needs exactly one h1")
-        if expected_language in ("ar", "fa") and not page.translation_fallback and page.direction != "rtl":
+        if language_by_code[expected_language]["dir"] == "rtl" and not page.translation_fallback and page.direction != "rtl":
             errors.append(f"{label}: needs dir=rtl")
         if label in NOTES_FIXTURES and not page.noindex():
             errors.append(
@@ -319,6 +322,7 @@ def check_search_metadata(site, pages):
 def check_site(site):
     """Check assets, HTML fragment destinations and SVG syntax."""
     pages = {}
+    site = site.resolve()
     errors = []
     references = 0
     for path in sorted(site.rglob("*.html")):
@@ -377,7 +381,7 @@ def check_site(site):
             ET.parse(path)
         except ET.ParseError as error:
             errors.append(f"{path.relative_to(site)}: invalid SVG XML: {error}")
-    indexable, metadata_errors = check_search_metadata(site, pages)
+    indexable, metadata_errors = check_search_metadata(site, pages, languages(Path(__file__).resolve().parent.parent))
     errors.extend(metadata_errors)
     return len(pages), references, indexable, errors
 

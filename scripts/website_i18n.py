@@ -41,7 +41,7 @@ def languages(root):
             raise ValueError("Each language needs code, name, readme and dir")
         if not all(isinstance(value, str) and value for value in item.values()):
             raise ValueError("Language fields must be nonempty strings")
-        if not re.fullmatch(r"[a-z]{2}(?:-[A-Z]{2})?", item["code"]) or item["code"] in codes:
+        if not re.fullmatch(r"[a-z]{2,3}(?:-[A-Z]{2})?", item["code"]) or item["code"] in codes:
             raise ValueError(f"Invalid or duplicate language: {item['code']}")
         if item["dir"] not in ("ltr", "rtl"):
             raise ValueError(f"Invalid text direction: {item['code']}")

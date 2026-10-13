@@ -37,6 +37,18 @@ WEBSITE = load_script("website")
 class WebsiteSearchChecks(unittest.TestCase):
     """Use authored pages and temporary fixtures to check the publishing boundary."""
 
+    def test_language_prefixes_use_inventory_instead_of_english_route_names(self):
+        with tempfile.TemporaryDirectory() as directory:
+            site = Path(directory)
+            pages = {}
+            for route, language, direction in (("faq/index.html", "en", "ltr"), ("ckb/faq/index.html", "ckb", "rtl")):
+                page = VERIFY.HtmlReferences()
+                page.feed(f'<html lang="{language}" dir="{direction}"><head><title>FAQ</title><meta name="robots" content="noindex"></head><body><h1>FAQ</h1></body></html>')
+                pages[site / route] = page
+            _, errors = VERIFY.check_search_metadata(site, pages, languages(ROOT))
+            language_errors = [error for error in errors if "needs lang=" in error or "needs dir=" in error]
+            self.assertEqual(language_errors, [])
+
     def test_sitemap_tracks_added_moved_removed_and_nonindexable_pages(self):
         with tempfile.TemporaryDirectory() as directory:
             site = Path(directory)

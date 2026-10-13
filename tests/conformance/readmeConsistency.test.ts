@@ -4,25 +4,13 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { PRODUCT_IDENTITY } from "../../src/identity.js";
 
-const translatedReadmes = [
-  "README_zh.md",
-  "README_zh-TW.md",
-  "README_ja.md",
-  "README_ko.md",
-  "README_tr.md",
-  "README_ru.md",
-  "README_vi.md",
-  "README_th.md",
-  "README_de.md",
-  "README_es.md",
-  "README_fr.md",
-  "README_uk.md",
-  "README_pl.md",
-  "README_pt-BR.md",
-  "README_ar.md",
-  "README_fa.md",
-  "README_id.md",
-] as const;
+const translatedReadmes: readonly string[] = (
+  JSON.parse(
+    await readFile(resolve("website/locales/languages.json"), "utf8"),
+  ) as readonly { readonly code: string; readonly readme: string }[]
+)
+  .filter(({ code }) => code !== "en")
+  .map(({ readme }) => readme);
 
 const jsonExamples = (content: string): unknown[] =>
   [...content.matchAll(/```json\s*([\s\S]*?)```/gu)].map((match): unknown =>

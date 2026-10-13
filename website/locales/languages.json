@@ -42,6 +42,12 @@
   { "code": "ar", "name": "العربية", "readme": "README_ar.md", "dir": "rtl" },
   { "code": "fa", "name": "فارسی", "readme": "README_fa.md", "dir": "rtl" },
   {
+    "code": "ckb",
+    "name": "کوردی ناوەندی",
+    "readme": "README_ckb.md",
+    "dir": "rtl"
+  },
+  {
     "code": "id",
     "name": "Bahasa Indonesia",
     "readme": "README_id.md",
