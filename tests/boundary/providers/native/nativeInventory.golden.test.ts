@@ -225,6 +225,69 @@ it("retains native inventory facts from captured Apple tool output", async () =>
   });
 });
 
+it("reports a renamed re-export once under its exported name", async () => {
+  const client = new NativeMacOSProvider(
+    {},
+    new FixtureRunner({
+      "dyld_info:-exports": await fixture(
+        "dyld-inventory/renamed-reexports.txt",
+      ),
+      nm: "_foo_renamed\n_own\n",
+    }),
+    "darwin",
+  ).createClient(machoTarget("/private/fixture"));
+  const execution = await client.execute("inspect_macho", {});
+  if (!execution.ok) throw execution.error;
+  expect(execution.value.result).toMatchObject({
+    exports: {
+      items: [
+        {
+          name: "_foo_renamed",
+          address: null,
+          weak: null,
+          reexport: true,
+          source: "libfoo",
+        },
+        { name: "_own", reexport: false, source: null },
+      ],
+      limitations: [
+        "Merged nm/dyld_info results may be incomplete for stripped binaries.",
+        "Renamed re-exports are listed under their exported name; the source library's symbol name is not reported.",
+      ],
+    },
+  });
+});
+
+it("splits re-export rows at the source library", () => {
+  // dyld_info -exports rows for synthetic dylibs: a source symbol named
+  // `operator()`, and a library whose install name contains ` from `.
+  expect(
+    parseDyldSymbols(
+      [
+        "[re-export] _call_renamed (operator() from libfoo)",
+        "[re-export] _g (from lib from foo)",
+      ].join("\n"),
+      "exports",
+    ),
+  ).toEqual([
+    {
+      name: "_call_renamed",
+      address: null,
+      weak: null,
+      reexport: true,
+      source: "libfoo",
+      sourceSymbol: "operator()",
+    },
+    {
+      name: "_g",
+      address: null,
+      weak: null,
+      reexport: true,
+      source: "lib from foo",
+    },
+  ]);
+});
+
 it("retains symbol names containing spaces in dyld inventory rows", () => {
   expect(
     parseDyldSymbols("  0x0000  _entry with space  (from fixture)", "imports"),
