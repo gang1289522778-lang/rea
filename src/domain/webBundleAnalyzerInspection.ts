@@ -209,15 +209,18 @@ const inspectRouteProperty = (
   accumulator: AnalysisAccumulator,
 ): void => {
   const key = semanticStaticPropertyName(node.key, node.computed);
-  if ((key === "path" || key === "route") && t.isStringLiteral(node.value))
-    addFinding({
-      collection: accumulator.routes,
-      script,
-      rawValue: node.value.value,
-      mechanism: `property:${key}`,
-      node,
-      accumulator,
-    });
+  if (key === "path" || key === "route") {
+    const rawValue = stringValue(node.value);
+    if (rawValue !== undefined)
+      addFinding({
+        collection: accumulator.routes,
+        script,
+        rawValue,
+        mechanism: `property:${key}`,
+        node,
+        accumulator,
+      });
+  }
 };
 
 interface AddEdgeContext {

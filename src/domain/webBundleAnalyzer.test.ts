@@ -219,6 +219,31 @@ describe("web bundle static-analysis parity", () => {
       "https://xhr.example.test/submit",
     ]);
   });
+
+  it("extracts routes declared with expression-free template literals", () => {
+    const source = `
+      const routes = [
+        { path: \`score-board\` },
+        { route: \`administration\` },
+        { path: "login" }
+      ];
+    `;
+    const result = analyzeCapturedWebBundle(inspection(source));
+    expect(result.observations.routes).toEqual([
+      expect.objectContaining({
+        value: "score-board",
+        mechanism: "property:path",
+      }),
+      expect.objectContaining({
+        value: "administration",
+        mechanism: "property:route",
+      }),
+      expect.objectContaining({
+        value: "login",
+        mechanism: "property:path",
+      }),
+    ]);
+  });
 });
 
 describe("web bundle API classification parity", () => {
