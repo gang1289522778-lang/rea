@@ -17,15 +17,13 @@ import {
   validateRecoverySourceMap,
   type parseWakaruReports,
 } from "./WakaruReport.js";
+import type { runRecoveryCommand } from "./RecoveryCommand.js";
+import type { RecoveryTool } from "./RecoveryEngine.js";
 import {
-  RECOVERY_LIMITATIONS,
-  RECOVERY_LIMITS,
+  WAKARU_LIMITATIONS,
+  WAKARU_LIMITS,
   WAKARU_RELEASE,
 } from "./WakaruRelease.js";
-import type {
-  resolveWakaruCommand,
-  runWakaruCommand,
-} from "./WakaruCommand.js";
 import type { WakaruVersionAdmission } from "./WakaruVersion.js";
 
 type PublicationContext = {
@@ -33,10 +31,10 @@ type PublicationContext = {
   staging: string;
   input: JavaScriptRecoveryInput;
   sources: readonly [RecoveryInputSnapshot, ...RecoveryInputSnapshot[]];
-  engine: Awaited<ReturnType<typeof resolveWakaruCommand>>;
+  tool: RecoveryTool;
   admitted: Exclude<WakaruVersionAdmission, { status: "unsupported" }>;
   parsed: Awaited<ReturnType<typeof parseWakaruReports>>;
-  execution: Awaited<ReturnType<typeof runWakaruCommand>>;
+  execution: Awaited<ReturnType<typeof runRecoveryCommand>>;
   signal?: AbortSignal;
 };
 type PublishedFile = JavaScriptRecoveryResult["manifest"];
@@ -92,7 +90,7 @@ export const publishWakaruArtifacts = async (
     "reports/provenance.json",
     await readRecoveryFile(
       join(staging, "provenance.json"),
-      RECOVERY_LIMITS.reportBytes,
+      WAKARU_LIMITS.reportBytes,
       signal,
     ),
   );
@@ -105,9 +103,9 @@ export const publishWakaruArtifacts = async (
       id: "wakaru",
       version: context.admitted.version,
       executable: {
-        path: context.engine.command,
-        sha256: context.engine.sha256,
-        bytes: context.engine.bytes,
+        path: context.tool.command,
+        sha256: context.tool.sha256,
+        bytes: context.tool.bytes,
       },
       audited_source_revision: WAKARU_RELEASE.revision,
       executed_source_revision: null,
@@ -143,7 +141,7 @@ export const publishWakaruArtifacts = async (
           },
     runtime_equivalence: "unknown" as const,
     limitations: [
-      ...RECOVERY_LIMITATIONS,
+      ...WAKARU_LIMITATIONS,
       ...(context.admitted.status === "compatible"
         ? [context.admitted.limitation]
         : []),
@@ -166,7 +164,7 @@ const publishModule = async (
     `modules/${module.filename}`,
     await readRecoveryFile(
       join(staging, module.filename),
-      RECOVERY_LIMITS.outputBytes,
+      WAKARU_LIMITS.outputBytes,
       signal,
     ),
   );
@@ -175,7 +173,7 @@ const publishModule = async (
     null;
   const map = await readRecoveryFile(
     mapPath,
-    RECOVERY_LIMITS.outputBytes,
+    WAKARU_LIMITS.outputBytes,
     signal,
   ).catch((cause: unknown) => {
     if (cause instanceof Error && "code" in cause && cause.code === "ENOENT")

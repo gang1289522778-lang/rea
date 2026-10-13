@@ -33,6 +33,10 @@ export const registerJavaScriptRecoveryCommands = (
         .describe(
           "Related absolute UTF-8 JavaScript file; repeat for multiple chunks",
         ),
+      engine: z
+        .enum(["wakaru", "jsbeautify"])
+        .optional()
+        .describe("Caller-supplied engine: wakaru (default) or jsbeautify"),
       extractionMode: z
         .enum(["structural", "heuristic", "inspection"])
         .optional()
@@ -60,6 +64,9 @@ export const registerJavaScriptRecoveryCommands = (
                   ...(options.additionalPath === undefined
                     ? {}
                     : { additional_paths: options.additionalPath }),
+                  ...(options.engine === undefined
+                    ? {}
+                    : { engine: options.engine }),
                   ...(options.extractionMode === undefined
                     ? {}
                     : { extraction_mode: options.extractionMode }),

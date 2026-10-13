@@ -10,6 +10,7 @@ import { SUPPORTED_CLIENT_DEFINITIONS } from "../../../src/application/Supported
 import { CLI_COMMAND_NAMES } from "../../../src/cliCommandNames.js";
 import { createCli } from "../../../src/cli.js";
 import { FRIDA_PROVIDER_IDENTITY } from "../../../src/frida/FridaInstrumentationManager.js";
+import { JSBEAUTIFY_PROVIDER_IDENTITY } from "../../../src/javascript/recovery/JsBeautifyRelease.js";
 import { TOOL_CONTRACTS } from "../../../src/contracts/toolContracts.js";
 import {
   HOPPER_OPERATIONS,
@@ -68,6 +69,11 @@ describe("canonical product catalog", () => {
 
   it("matches every source-derived build-generated product fact", async () => {
     const catalog = await createProductCatalog(root);
+    expect(
+      catalog.providers.find(
+        ({ id }) => id === JSBEAUTIFY_PROVIDER_IDENTITY.id,
+      ),
+    ).toMatchObject({ capabilities: ["recover_javascript_sources"] });
     expect(catalog.setup_clients.map(({ id }) => id)).toEqual(
       SUPPORTED_CLIENT_DEFINITIONS.map(({ name }) => name),
     );

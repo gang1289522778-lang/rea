@@ -1,3 +1,5 @@
+import type { RecoveryLimits } from "./RecoveryEngine.js";
+
 /** Unchanged upstream source pin; executed bytes are identified separately. */
 export const WAKARU_RELEASE = {
   version: "1.14.0",
@@ -21,17 +23,17 @@ export const WAKARU_PROVIDER_IDENTITY = {
 } as const;
 
 /** Per-operation resource bounds for the verified Linux adapter. */
-export const RECOVERY_LIMITS = {
+export const WAKARU_LIMITS = {
   inputBytes: 64 * 1024 * 1024,
   outputBytes: 128 * 1024 * 1024,
   outputEntries: 10000,
   reportBytes: 8 * 1024 * 1024,
   addressSpaceBytes: 1024 * 1024 * 1024,
   timeoutMs: 120000,
-} as const;
+} as const satisfies RecoveryLimits;
 
 /** Public limitations for transformations and extraction provenance. */
-export const RECOVERY_LIMITATIONS = [
+export const WAKARU_LIMITATIONS = [
   "Recovered sources are derived artifacts; original variable names and runtime equivalence are not established.",
   "Extraction ranges refer to half-open UTF-8 byte offsets in the original input, not rewritten line positions or whole-bundle coverage.",
   "Emitted source maps are preserved as reported by the engine; their mapping accuracy is not independently established.",

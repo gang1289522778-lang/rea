@@ -18,6 +18,7 @@ export interface SessionAvailabilityDefaults {
     | "electronAutomationEnabled"
     | "v8InspectorObservationEnabled"
     | "javascriptRecoveryEnabled"
+    | "javascriptRecoveryEngines"
     | "webModuleResolutionEnabled"
     | "binaryLayoutEnabled"
     | "recordedCrashEnabled"
@@ -51,6 +52,12 @@ export const sessionAvailabilityPolicy = (
         defaults.optionalFeatures?.firmwareInspectionEnabled ?? false,
       firmwareExtractionEnabled:
         defaults.optionalFeatures?.firmwareExtractionEnabled ?? false,
+      ...(defaults.optionalFeatures?.javascriptRecoveryEngines === undefined
+        ? {}
+        : {
+            javascriptRecoveryEngines:
+              defaults.optionalFeatures.javascriptRecoveryEngines,
+          }),
       javascriptRecoveryEnabled:
         defaults.optionalFeatures?.javascriptRecoveryEnabled ?? false,
       webModuleResolutionEnabled:

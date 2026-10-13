@@ -1,14 +1,25 @@
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
+import { ProviderProcessSupervisor } from "../../process/ProviderProcess.js";
 import { AnalysisCapabilityUnavailableError } from "../../domain/analysisErrorCore.js";
 import { projectAnalysisError } from "../../domain/analysisErrorProjection.js";
-import {
-  resolveWakaruCommand,
-  runWakaruCommand,
-  type WakaruLauncher,
-} from "./WakaruCommand.js";
-import { RECOVERY_LIMITS } from "./WakaruRelease.js";
+import { runRecoveryCommand } from "./RecoveryCommand.js";
+import type { RecoveryLauncher } from "./RecoveryEngine.js";
+import { resolveWakaruCommand } from "./WakaruCommand.js";
+import { WAKARU_LIMITS } from "./WakaruRelease.js";
+
+const wakaru = {
+  providerId: "wakaru",
+  name: "Wakaru",
+  limits: WAKARU_LIMITS,
+  sha256: "0".repeat(64),
+  bytes: 0,
+};
+const expired = () => ({
+  at: performance.now() - 1,
+  timeoutMs: WAKARU_LIMITS.timeoutMs,
+});
 
 it("names the Wakaru configuration requirement when it is not configured", async () => {
   const refusal: unknown = await resolveWakaruCommand({}).catch(
@@ -27,13 +38,14 @@ it("names the Wakaru configuration requirement when it is not configured", async
 
 it("rejects an exhausted shared execution budget before launching the next command", async () => {
   await expect(
-    runWakaruCommand({
+    runRecoveryCommand({
+      ...wakaru,
       command: "/selected/wakaru",
       limiter: "/usr/bin/prlimit",
       arguments: ["--version"],
       cwd: "/tmp/unused",
       environment: {},
-      deadline: performance.now() - 1,
+      deadline: expired(),
       launcher: async () => {
         throw new Error("An expired budget must not launch");
       },
@@ -46,13 +58,14 @@ it("rejects an exhausted shared execution budget before launching the next comma
 
 it("preserves caller cancellation before acquiring an expired execution budget", async () => {
   await expect(
-    runWakaruCommand({
+    runRecoveryCommand({
+      ...wakaru,
       command: "/selected/wakaru",
       limiter: "/usr/bin/prlimit",
       arguments: ["--version"],
       cwd: "/tmp/unused",
       environment: {},
-      deadline: performance.now() - 1,
+      deadline: expired(),
       signal: AbortSignal.abort(),
       launcher: async () => {
         throw new Error("A cancelled request must not launch");
@@ -65,7 +78,7 @@ const commandFixture = (
   emit: (producer: ReturnType<typeof createProducer>) => void,
 ) => {
   const producer = createProducer();
-  const launcher: WakaruLauncher = async (options) => {
+  const launcher: RecoveryLauncher = async (options) => {
     setImmediate(() => emit(producer));
     return {
       process: producer,
@@ -81,12 +94,16 @@ const commandFixture = (
   return {
     producer,
     context: {
+      ...wakaru,
       command: "/selected/wakaru",
       limiter: "/usr/bin/prlimit",
       arguments: ["--version"],
       cwd: "/tmp/unused",
       environment: {},
-      deadline: performance.now() + 5_000,
+      deadline: {
+        at: performance.now() + 5_000,
+        timeoutMs: WAKARU_LIMITS.timeoutMs,
+      },
       launcher,
     },
   };
@@ -111,7 +128,7 @@ it("retains stdout and stderr delivered after launcher exit", async () => {
       producer.emit("close", 0, null);
     });
   });
-  await expect(runWakaruCommand(context)).resolves.toMatchObject({
+  await expect(runRecoveryCommand(context)).resolves.toMatchObject({
     exit_code: 0,
     signal: null,
     stdout: "firstlast",
@@ -123,12 +140,12 @@ it("checks the diagnostic byte limit against output delivered after exit", async
   const { context } = commandFixture((producer) => {
     producer.emit("exit", 0, null);
     setImmediate(() => {
-      producer.stderr.end(Buffer.alloc(RECOVERY_LIMITS.reportBytes + 1, 97));
+      producer.stderr.end(Buffer.alloc(WAKARU_LIMITS.reportBytes + 1, 97));
       producer.stdout.end();
       producer.emit("close", 0, null);
     });
   });
-  await expect(runWakaruCommand(context)).rejects.toMatchObject({
+  await expect(runRecoveryCommand(context)).rejects.toMatchObject({
     _tag: "AnalysisOutputError",
     operation: "recover_javascript_sources",
   });
@@ -140,7 +157,13 @@ it("enforces the shared deadline while exited output streams remain open", async
   });
   try {
     await expect(
-      runWakaruCommand({ ...context, deadline: performance.now() + 50 }),
+      runRecoveryCommand({
+        ...context,
+        deadline: {
+          at: performance.now() + 50,
+          timeoutMs: WAKARU_LIMITS.timeoutMs,
+        },
+      }),
     ).rejects.toMatchObject({
       _tag: "AnalysisTimeoutError",
       operation: "recover_javascript_sources",
@@ -160,7 +183,7 @@ it("honors cancellation while waiting for output after exit", async () => {
   });
   try {
     await expect(
-      runWakaruCommand({ ...context, signal: controller.signal }),
+      runRecoveryCommand({ ...context, signal: controller.signal }),
     ).rejects.toMatchObject({
       _tag: "AnalysisCancelledError",
     });
@@ -168,5 +191,33 @@ it("honors cancellation while waiting for output after exit", async () => {
   } finally {
     producer.stdout.destroy();
     producer.stderr.destroy();
+  }
+});
+
+it("caps retained diagnostics as a noisy process emits them, while preserving overflow rejection", async () => {
+  const snapshots = vi.spyOn(ProviderProcessSupervisor.prototype, "snapshot");
+  const { context } = commandFixture((producer) => {
+    producer.stdout.end("0123456789abcdef");
+    producer.stderr.end();
+    producer.emit("exit", 0, null);
+    producer.emit("close", 0, null);
+  });
+  try {
+    await expect(
+      runRecoveryCommand({
+        ...context,
+        limits: { ...context.limits, reportBytes: 4 },
+      }),
+    ).rejects.toMatchObject({ _tag: "AnalysisOutputError" });
+    expect(snapshots).toHaveBeenCalled();
+    for (const result of snapshots.mock.results) {
+      if (result.type === "return")
+        expect(
+          Buffer.byteLength(result.value.stdout.text) +
+            Buffer.byteLength(result.value.stderr.text),
+        ).toBeLessThanOrEqual(8);
+    }
+  } finally {
+    snapshots.mockRestore();
   }
 });

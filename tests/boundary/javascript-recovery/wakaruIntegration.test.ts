@@ -6,7 +6,7 @@ import { SafeOutputTreeCreationFailure } from "../../../src/artifacts/SafeOutput
 import { javascriptRecoveryResultSchema } from "../../../src/domain/javascript/javascriptRecovery.js";
 import { parseEvidence } from "../../../src/domain/evidence.js";
 import { projectAnalysisError } from "../../../src/domain/analysisErrorProjection.js";
-import { RECOVERY_LIMITS } from "../../../src/javascript/recovery/WakaruRelease.js";
+import { WAKARU_LIMITS } from "../../../src/javascript/recovery/WakaruRelease.js";
 import {
   assertRecoveryCleanup,
   recoveryFixture,
@@ -515,7 +515,7 @@ describe.skipIf(process.platform !== "linux" || process.arch !== "x64")(
       const additional = join(fixture.root, "chunk.js");
       const handle = await open(additional, "wx");
       try {
-        await handle.truncate(RECOVERY_LIMITS.inputBytes);
+        await handle.truncate(WAKARU_LIMITS.inputBytes);
       } finally {
         await handle.close();
       }

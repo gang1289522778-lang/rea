@@ -8,6 +8,8 @@ import type {
 
 /** Typed boundary for upstream source recovery without exposing its protocol. */
 export interface JavaScriptRecoveryPort {
+  /** Engine IDs offered by this port; omission preserves unknown support. */
+  readonly engines?: readonly JavaScriptRecoveryInput["engine"][];
   close?(): Promise<void>;
   recover(
     input: JavaScriptRecoveryInput,

@@ -18,6 +18,12 @@ export const javascriptRecoveryInputSchema = z.strictObject({
   output_directory: localPathStringSchema.describe(
     "Absolute absent output directory; parent must exist",
   ),
+  engine: z
+    .enum(["wakaru", "jsbeautify"])
+    .default("wakaru")
+    .describe(
+      "Caller-supplied engine: Wakaru module unpacking, or jsbeautify per-file deobfuscation",
+    ),
   extraction_mode: z
     .enum(["structural", "heuristic", "inspection"])
     .default("structural")
@@ -28,7 +34,7 @@ export const javascriptRecoveryInputSchema = z.strictObject({
     .enum(["minimal", "standard", "aggressive"])
     .default("standard")
     .describe(
-      "Upstream syntax recovery level; runtime equivalence remains unverified",
+      "Upstream syntax recovery level; runtime equivalence remains unverified. jsbeautify: minimal formats only, standard deobfuscates, aggressive also infers local names",
     ),
 });
 

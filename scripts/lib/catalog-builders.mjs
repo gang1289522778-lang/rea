@@ -363,6 +363,11 @@ export const providerCatalog = (sources) => {
       contracts:
         sources.javascriptRecoveryContracts.JAVASCRIPT_RECOVERY_TOOL_CONTRACTS,
     },
+    {
+      identity: sources.jsbeautifyProvider.JSBEAUTIFY_PROVIDER_IDENTITY,
+      contracts:
+        sources.javascriptRecoveryContracts.JAVASCRIPT_RECOVERY_TOOL_CONTRACTS,
+    },
   ]
     .map(({ identity, contracts }) => ({
       id: identity.id,

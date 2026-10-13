@@ -56,6 +56,9 @@ export type AvailabilityPolicy = {
   readonly androidAnalysisAvailability?: ProviderAvailability;
   readonly jebAnalysisAvailability?: ProviderAvailability;
   readonly javascriptRecoveryEnabled?: boolean;
+  readonly javascriptRecoveryEngines?: Readonly<
+    Record<"wakaru" | "jsbeautify", boolean>
+  >;
   readonly webModuleResolutionEnabled?: boolean;
   readonly browserObservationEnabled?: boolean;
   readonly browserScenarioEnabled?: boolean;
@@ -382,13 +385,42 @@ const workflowAvailabilityFor = ({
             },
       ],
     };
+  if (
+    name === "recover_javascript_sources" &&
+    policy.javascriptRecoveryEngines !== undefined
+  ) {
+    const engines = policy.javascriptRecoveryEngines;
+    const available = engines.wakaru || engines.jsbeautify;
+    return {
+      reason: available ? "available" : "provider_missing",
+      remediation: available
+        ? null
+        : "Configure a caller-supplied JavaScript recovery engine; see docs/javascript-recovery.md.",
+      defaultModeAvailable: engines.wakaru,
+      modes: (["wakaru", "jsbeautify"] as const).map((engine) =>
+        engines[engine]
+          ? {
+              name: engine,
+              available: true as const,
+              missing_operations: [],
+              remediation: null,
+            }
+          : {
+              name: engine,
+              available: false as const,
+              missing_operations: [engine],
+              remediation: `Configure the caller-supplied ${engine} engine; see docs/javascript-recovery.md.`,
+            },
+      ),
+    };
+  }
   if (name === "recover_javascript_sources")
     return policy.javascriptRecoveryEnabled === true
       ? { reason: "available", remediation: null }
       : {
           reason: "provider_missing",
           remediation:
-            "On Linux x64, provide an absolute REA_WAKARU_COMMAND for Wakaru ^1.13.0 (verified with 1.14.0) and util-linux prlimit; see docs/javascript-recovery.md#install-wakaru. No binary target is required.",
+            "Provide util-linux prlimit and either, on Linux x64, an absolute REA_WAKARU_COMMAND for Wakaru ^1.13.0 (verified with 1.14.0) or, on Linux, an absolute REA_JSBEAUTIFY_COMMAND for jsbeautify (engine: jsbeautify); see docs/javascript-recovery.md. No binary target is required.",
         };
   if (name === "inspect_binary_layout")
     return policy.binaryLayoutEnabled === true

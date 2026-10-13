@@ -7,8 +7,8 @@ import { AnalysisOutputError } from "../../domain/analysisErrorCore.js";
 import { ProviderAdapterError } from "../../domain/providerAdapterError.js";
 import type { JavaScriptRecoveryResult } from "../../domain/javascript/javascriptRecovery.js";
 import { readRecoveryFile, recoveryFailureMessage } from "./RecoveryFiles.js";
-import { RECOVERY_LIMITS } from "./WakaruRelease.js";
-import type { runWakaruCommand } from "./WakaruCommand.js";
+import { WAKARU_LIMITS } from "./WakaruRelease.js";
+import type { runRecoveryCommand } from "./RecoveryCommand.js";
 
 const warningSchema = z.looseObject({
   filename: z.string(),
@@ -52,7 +52,7 @@ const provenanceSchema = z.looseObject({
 const OPERATION = "recover_javascript_sources";
 
 type ReportContext = {
-  execution: Awaited<ReturnType<typeof runWakaruCommand>>;
+  execution: Awaited<ReturnType<typeof runRecoveryCommand>>;
   provenancePath: string;
   snapshots: ReadonlyMap<string, Buffer>;
   files: readonly { relativePath: string }[];
@@ -76,7 +76,7 @@ export const parseWakaruReports = async (context: ReportContext) => {
     const provenance = provenanceSchema.parse(
       JSON.parse(
         (
-          await readRecoveryFile(provenancePath, RECOVERY_LIMITS.reportBytes)
+          await readRecoveryFile(provenancePath, WAKARU_LIMITS.reportBytes)
         ).toString("utf8"),
       ),
     );

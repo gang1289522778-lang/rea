@@ -10,7 +10,7 @@ import {
   AnalysisOutputError,
   AnalysisTimeoutError,
 } from "../../domain/analysisErrorCore.js";
-import { RECOVERY_LIMITS } from "./WakaruRelease.js";
+import type { RecoveryLimits } from "./RecoveryEngine.js";
 
 const OPERATION = "recover_javascript_sources";
 
@@ -138,6 +138,7 @@ const snapshotRecoveryInput = async (
 export const snapshotRecoveryInputs = async (
   paths: readonly [string, ...string[]],
   directory: string,
+  inputBytes: number,
   signal?: AbortSignal,
 ): Promise<readonly [RecoveryInputSnapshot, ...RecoveryInputSnapshot[]]> => {
   let commonDirectory = dirname(resolve(paths[0]));
@@ -160,7 +161,7 @@ export const snapshotRecoveryInputs = async (
     }
   }
   const snapshots: RecoveryInputSnapshot[] = [];
-  let remaining = RECOVERY_LIMITS.inputBytes;
+  let remaining = inputBytes;
   for (const path of paths) {
     const relativePath =
       paths.length === 1
@@ -198,6 +199,7 @@ export const snapshotRecoveryInputs = async (
 /** Inventory staging without following symlinks or publishing special files. */
 export const inventoryRecoveryFiles = async (
   root: string,
+  limits: Pick<RecoveryLimits, "outputBytes" | "outputEntries">,
   signal?: AbortSignal,
 ): Promise<
   readonly { relativePath: string; path: string; bytes: number }[]
@@ -218,10 +220,10 @@ export const inventoryRecoveryFiles = async (
       for await (const entry of handle) {
         checkRecoveryCancellation(signal);
         entries++;
-        if (entries > RECOVERY_LIMITS.outputEntries)
+        if (entries > limits.outputEntries)
           throw new AnalysisOutputError(
             OPERATION,
-            "Recovery staging exceeds the 10000-entry resource limit",
+            `Recovery staging exceeds the ${String(limits.outputEntries)}-entry resource limit`,
           );
         children.push(entry.name);
       }
@@ -241,10 +243,10 @@ export const inventoryRecoveryFiles = async (
       if (info.isDirectory()) await visit(path, relativePath);
       else {
         bytes += info.size;
-        if (bytes > RECOVERY_LIMITS.outputBytes)
+        if (bytes > limits.outputBytes)
           throw new AnalysisOutputError(
             OPERATION,
-            "Recovery staging exceeds the 128 MiB resource limit",
+            `Recovery staging exceeds the ${String(limits.outputBytes / 1024 / 1024)} MiB resource limit`,
           );
         files.push({ relativePath, path, bytes: info.size });
       }
@@ -275,10 +277,10 @@ export const checkRecoveryCancellation = (signal?: AbortSignal): void => {
 
 /** Keep both tool invocations within one operation's execution budget. */
 export const checkRecoveryDeadline = (
-  deadline: number,
+  deadline: { readonly at: number; readonly timeoutMs: number },
   signal?: AbortSignal,
 ): void => {
   checkRecoveryCancellation(signal);
-  if (performance.now() >= deadline)
-    throw new AnalysisTimeoutError(OPERATION, RECOVERY_LIMITS.timeoutMs);
+  if (performance.now() >= deadline.at)
+    throw new AnalysisTimeoutError(OPERATION, deadline.timeoutMs);
 };

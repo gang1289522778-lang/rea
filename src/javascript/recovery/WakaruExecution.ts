@@ -1,29 +1,21 @@
 import { join } from "node:path";
-import {
-  createAnalysisExecution,
-  type ExecutionOptions,
-} from "../../application/AnalysisProvider.js";
-import type { SafeOutputTree } from "../../artifacts/SafeOutputTree.js";
+import { createAnalysisExecution } from "../../application/AnalysisProvider.js";
 import {
   AnalysisCapabilityUnavailableError,
   AnalysisOutputError,
 } from "../../domain/analysisErrorCore.js";
-import type { JavaScriptRecoveryInput } from "../../domain/javascript/javascriptRecovery.js";
 import { jsonValueSchema } from "../../domain/jsonValue.js";
+import { runRecoveryCommand } from "./RecoveryCommand.js";
+import type { RecoveryEngine, RecoveryWorkspace } from "./RecoveryEngine.js";
 import {
   fingerprintRecoveryFile,
   inventoryRecoveryFiles,
   readRecoveryFile,
-  type snapshotRecoveryInputs,
 } from "./RecoveryFiles.js";
-import {
-  runWakaruCommand,
-  type resolveWakaruCommand,
-  type WakaruLauncher,
-} from "./WakaruCommand.js";
+import { resolveWakaruCommand } from "./WakaruCommand.js";
 import { parseWakaruReports } from "./WakaruReport.js";
 import { publishWakaruArtifacts } from "./WakaruPublication.js";
-import { RECOVERY_LIMITS, WAKARU_PROVIDER_IDENTITY } from "./WakaruRelease.js";
+import { WAKARU_LIMITS, WAKARU_PROVIDER_IDENTITY } from "./WakaruRelease.js";
 import { admitWakaruVersion } from "./WakaruVersion.js";
 
 const OPERATION = "recover_javascript_sources";
@@ -33,32 +25,23 @@ const MODES = {
   inspection: "inspect",
 } as const;
 
-type RecoveryWorkspace = {
-  root: string;
-  tree: SafeOutputTree;
-  input: JavaScriptRecoveryInput;
-  sources: Awaited<ReturnType<typeof snapshotRecoveryInputs>>;
-  engine: Awaited<ReturnType<typeof resolveWakaruCommand>>;
-  environment: Readonly<Record<string, string | undefined>>;
-  launcher: WakaruLauncher | undefined;
-  options: ExecutionOptions | undefined;
-  deadline: number;
-};
-
 /** Consume the pinned producer representation in a private workspace. */
 const executeWakaruRecovery = async (context: RecoveryWorkspace) => {
-  const { root, input, sources, engine, environment, launcher, options } =
+  const { root, input, sources, tool, environment, launcher, options } =
     context;
   const staging = join(root, "modules");
   const commandContext = {
-    ...engine,
+    ...tool,
+    providerId: WAKARU_PROVIDER_IDENTITY.id,
+    name: WAKARU_PROVIDER_IDENTITY.name,
+    limits: WAKARU_LIMITS,
     cwd: root,
     deadline: context.deadline,
     environment: environment,
     ...(options?.signal === undefined ? {} : { signal: options.signal }),
     ...(launcher === undefined ? {} : { launcher: launcher }),
   };
-  const version = await runWakaruCommand({
+  const version = await runRecoveryCommand({
     ...commandContext,
     arguments: ["--version"],
   });
@@ -76,7 +59,7 @@ const executeWakaruRecovery = async (context: RecoveryWorkspace) => {
       { userMessage: `${mismatch}.` },
     );
   }
-  const run = await runWakaruCommand({
+  const run = await runRecoveryCommand({
     ...commandContext,
     staging,
     arguments: [
@@ -90,7 +73,11 @@ const executeWakaruRecovery = async (context: RecoveryWorkspace) => {
       staging,
     ],
   });
-  const files = await inventoryRecoveryFiles(staging, options?.signal);
+  const files = await inventoryRecoveryFiles(
+    staging,
+    WAKARU_LIMITS,
+    options?.signal,
+  );
   const snapshots = new Map<string, Buffer>();
   for (const source of sources)
     snapshots.set(
@@ -111,8 +98,8 @@ const executeWakaruRecovery = async (context: RecoveryWorkspace) => {
 };
 
 /** Publish validated recovery and retain exact source and engine bindings. */
-export const prepareWakaruExecution = async (context: RecoveryWorkspace) => {
-  const { root, tree, input, sources, engine, options } = context;
+const prepareWakaruExecution = async (context: RecoveryWorkspace) => {
+  const { root, tree, input, sources, tool, options } = context;
   const [source] = sources;
   const staging = join(root, "modules");
   const { version, admitted, run, parsed } =
@@ -122,7 +109,7 @@ export const prepareWakaruExecution = async (context: RecoveryWorkspace) => {
     staging,
     input,
     sources,
-    engine,
+    tool,
     admitted,
     parsed,
     execution: run,
@@ -131,7 +118,7 @@ export const prepareWakaruExecution = async (context: RecoveryWorkspace) => {
   for (const selected of sources) {
     const current = await fingerprintRecoveryFile(
       selected.path,
-      RECOVERY_LIMITS.inputBytes,
+      WAKARU_LIMITS.inputBytes,
       options?.signal,
     );
     if (current.sha256 !== selected.sha256 || current.bytes !== selected.bytes)
@@ -143,11 +130,11 @@ export const prepareWakaruExecution = async (context: RecoveryWorkspace) => {
   if (
     (
       await fingerprintRecoveryFile(
-        engine.command,
-        RECOVERY_LIMITS.outputBytes,
+        tool.command,
+        WAKARU_LIMITS.outputBytes,
         options?.signal,
       )
-    ).sha256 !== engine.sha256
+    ).sha256 !== tool.sha256
   )
     throw new AnalysisOutputError(
       OPERATION,
@@ -181,4 +168,13 @@ export const prepareWakaruExecution = async (context: RecoveryWorkspace) => {
       limitations: result.limitations,
     },
   );
+};
+
+/** Wakaru module unpacking: structural, heuristic or inspection extraction. */
+export const wakaruEngine: RecoveryEngine = {
+  id: "wakaru",
+  limits: WAKARU_LIMITS,
+  validate: () => undefined,
+  resolve: resolveWakaruCommand,
+  execute: prepareWakaruExecution,
 };

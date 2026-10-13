@@ -63,27 +63,30 @@ vi.mock(
       await import("../../../src/application/AnalysisProvider.js");
     return {
       ...actual,
-      prepareWakaruExecution: async (
-        context: Parameters<typeof actual.prepareWakaruExecution>[0],
-      ) => {
-        const source = context.sources[0];
-        if (source === undefined) throw new Error("Missing recovery source");
-        const bytes = Buffer.from("module.exports = 42;");
-        await context.tree.write("module.js", Readable.from([bytes]), {
-          sha256: createHash("sha256").update(bytes).digest("hex"),
-          bytes: bytes.byteLength,
-        });
-        return createAnalysisExecution(
-          { status: "complete" },
-          { id: "wakaru", name: "Wakaru", version: "1.14.0" },
-          {
-            subject: {
-              path: source.path,
-              sha256: source.sha256,
-              format: "javascript",
+      wakaruEngine: {
+        ...actual.wakaruEngine,
+        execute: async (
+          context: Parameters<typeof actual.wakaruEngine.execute>[0],
+        ) => {
+          const source = context.sources[0];
+          if (source === undefined) throw new Error("Missing recovery source");
+          const bytes = Buffer.from("module.exports = 42;");
+          await context.tree.write("module.js", Readable.from([bytes]), {
+            sha256: createHash("sha256").update(bytes).digest("hex"),
+            bytes: bytes.byteLength,
+          });
+          return createAnalysisExecution(
+            { status: "complete" },
+            { id: "wakaru", name: "Wakaru", version: "1.14.0" },
+            {
+              subject: {
+                path: source.path,
+                sha256: source.sha256,
+                format: "javascript",
+              },
             },
-          },
-        );
+          );
+        },
       },
     };
   },
@@ -91,7 +94,8 @@ vi.mock(
 
 import { AnalysisCancelledError } from "../../../src/domain/analysisErrorCore.js";
 import { projectAnalysisError } from "../../../src/domain/analysisErrorProjection.js";
-import { WakaruProvider } from "../../../src/javascript/recovery/WakaruProvider.js";
+import { RecoveryProvider } from "../../../src/javascript/recovery/RecoveryProvider.js";
+import { wakaruEngine } from "../../../src/javascript/recovery/WakaruExecution.js";
 
 it.skipIf(process.platform === "win32")(
   "keeps mid-commit output-tree cancellation typed through the provider",
@@ -103,10 +107,11 @@ it.skipIf(process.platform === "win32")(
     const controller = new AbortController();
     publicationCancellation.controller = controller;
     publicationCancellation.directorySyncs = 0;
-    const provider = new WakaruProvider({});
+    const provider = new RecoveryProvider([wakaruEngine], {});
     try {
       const result = await provider.recover(
         {
+          engine: "wakaru",
           path: sourcePath,
           output_directory: output,
           extraction_mode: "structural",
