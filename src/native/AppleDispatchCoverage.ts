@@ -27,6 +27,7 @@ export const pushDispatchCoverage = (input: {
   readonly examined: number;
   readonly categoriesExamined: number;
   readonly truncated: boolean;
+  readonly objcListScanTruncated: boolean;
   readonly fixups: PointerFixups;
   readonly vtables: FacetDecodeFacts;
   readonly swift: FacetDecodeFacts;
@@ -38,6 +39,7 @@ export const pushDispatchCoverage = (input: {
     examined,
     categoriesExamined,
     truncated,
+    objcListScanTruncated,
     fixups,
     vtables,
     swift,
@@ -78,7 +80,7 @@ export const pushDispatchCoverage = (input: {
   const classReasons = [
     ...failures,
     ...classRecords,
-    ...(truncated ? ["max_records_reached"] : []),
+    ...(truncated || objcListScanTruncated ? ["max_records_reached"] : []),
   ];
   const categoryMethods = result.objc_dispatch_implementations.filter(
     ({ category }) => category !== undefined,
