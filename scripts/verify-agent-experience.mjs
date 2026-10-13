@@ -1,20 +1,14 @@
 import { spawn } from "node:child_process";
-import {
-  chmod,
-  copyFile,
-  mkdir,
-  mkdtemp,
-  readFile,
-  rm,
-  writeFile,
-} from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { delimiter, dirname, join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
-import { evaluateCodexEvents } from "../dist/evaluation/CodexAgentEval.js";
+import { evaluateAgentTranscript } from "../dist/evaluation/AgentEval.js";
+import { parseAgentTranscript } from "../dist/evaluation/AgentTranscript.js";
 import {
   createAgentEvaluationFixtures,
   agentFixtureClaims,
@@ -25,12 +19,26 @@ import {
   summarizeFactualCorrectness,
 } from "../dist/evaluation/AgentEvaluationReport.js";
 import { PRODUCT_IDENTITY } from "../dist/identity.js";
+import {
+  cleanupOwnedProcessGroup,
+  verifyNoTokenOwnedProcesses,
+} from "../dist/process/ProcessOwnership.js";
+import { systemProcessOwnershipHost } from "../dist/process/ProcessOwnershipObservation.js";
+import {
+  ProviderProcessSupervisor,
+  spawnOwnedProviderProcess,
+} from "../dist/process/ProviderProcess.js";
+import {
+  agentEvalEnvironment,
+  prepareAgentEvalClient,
+  selectAgentEvalClient,
+} from "./lib/agent-eval-clients.mjs";
 import { completeVerifierRun, createVerifierRun } from "./lib/verifier-run.mjs";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const verifierRun = createVerifierRun();
 const timeoutMs = Number(process.env.REA_AGENT_EVAL_TIMEOUT_MS ?? 480_000);
-const codex = process.env.REA_CODEX_CLI ?? "codex";
+const client = selectAgentEvalClient(process.env.REA_AGENT_EVAL_CLIENT);
 const optionalModel = process.env.REA_AGENT_EVAL_MODEL;
 
 if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 10_000)
@@ -45,52 +53,35 @@ await mkdir(evaluationParent, { recursive: true, mode: 0o700 });
 const evaluationRoot = await mkdtemp(join(evaluationParent, "run-"));
 const fixtureRoot = join(evaluationRoot, "targets");
 const account = join(evaluationRoot, "account");
-const codexHome = join(evaluationRoot, "codex");
-const authPath = join(codexHome, "auth.json");
-const skillDestination = join(
-  account,
-  ".agents/skills/reverse-engineer-anything",
-);
-const evaluationEnvironment = {
-  ...Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([name]) => !/^(?:REA_|CODEX_|GHIDRA_|HOPPER_|IDA_)/u.test(name),
-    ),
-  ),
-  HOME: account,
-  USERPROFILE: account,
-  CODEX_HOME: codexHome,
-  XDG_CONFIG_HOME: join(account, ".config"),
-  XDG_DATA_HOME: join(account, ".local/share"),
-  XDG_CACHE_HOME: join(account, ".cache"),
-  REA_PROCESS_RUN_ID: verifierRun.run_id,
-  PATH: `${dirname(process.execPath)}${delimiter}${process.env.PATH ?? ""}`,
-};
+// Copied credentials are registered here before they are written.
+const authPaths = [];
+// The run scope retains process authority until both stopping and token verification finish.
+const scenarioProcesses = new Map();
+const ownershipReceipt = join(evaluationRoot, "process-ownership.json");
 
 try {
-  const codexVersion = await readCommandVersion(codex);
-  await Promise.all([
-    mkdir(fixtureRoot, { recursive: true }),
-    mkdir(account),
-    mkdir(codexHome, { mode: 0o700 }),
-  ]);
+  const clientVersion = await readCommandVersion(
+    client.command,
+    agentEvalEnvironment({
+      account,
+      runId: verifierRun.run_id,
+      client: { environment: {} },
+    }),
+  );
+  await Promise.all([mkdir(fixtureRoot, { recursive: true }), mkdir(account)]);
   // Reuse authentication only. User config, plugins, rules, history and skills
   // must not make a fresh installed-skill trial pass accidentally.
-  try {
-    await copyFile(
-      join(process.env.CODEX_HOME ?? join(homedir(), ".codex"), "auth.json"),
-      authPath,
-    );
-    await chmod(authPath, 0o600);
-  } catch (cause) {
-    if (cause?.code !== "ENOENT") throw cause;
-    // Environment/API-key authentication can work without a local auth file.
-  }
-  await writeFile(
-    join(codexHome, "config.toml"),
-    'approval_policy = "never"\nsandbox_mode = "read-only"\nweb_search = "disabled"\n[features]\nmulti_agent = false\nshell_snapshot = false\n[history]\npersistence = "none"\n',
-    { mode: 0o600 },
-  );
+  const prepared = await prepareAgentEvalClient(client, {
+    evaluationRoot,
+    account,
+    model: optionalModel,
+    authPaths,
+  });
+  const evaluationEnvironment = agentEvalEnvironment({
+    account,
+    runId: verifierRun.run_id,
+    client: prepared,
+  });
   for (const approval of ["--dry-run", "--yes"]) {
     await runProcess(
       process.execPath,
@@ -98,7 +89,7 @@ try {
         join(repositoryRoot, "scripts/rea.mjs"),
         "setup",
         "--client",
-        "codex",
+        client.setupClient,
         approval,
         "--json",
       ],
@@ -108,7 +99,7 @@ try {
     );
   }
   const installedSkill = await readFile(
-    join(skillDestination, "SKILL.md"),
+    join(prepared.skillDirectory, "SKILL.md"),
     "utf8",
   );
   if (!installedSkill.includes(`  version: "${PRODUCT_IDENTITY.skillVersion}"`))
@@ -214,6 +205,7 @@ try {
     },
     {
       id: "browser",
+      approvedTools: ["list_browser_targets"],
       expectedFirstTool: "list_browser_targets",
       requiresEvidence: false,
       requiredAnswerTermGroups: [
@@ -252,15 +244,21 @@ try {
     );
   const results = [];
   for (const scenario of scenarios) {
-    process.stderr.write(`Running Codex agent evaluation: ${scenario.id}\n`);
+    process.stderr.write(
+      `Running ${client.id} agent evaluation: ${scenario.id}\n`,
+    );
     const fixtureId = scenario.fixtureScenarioId ?? scenario.id;
     const fixtureClaims = agentFixtureClaims(fixtureId, targets);
     const answerInstructions = agentFixtureAnswerInstructions(fixtureId);
-    const execution = await runCodex(
-      answerInstructions.length === 0
-        ? scenario.prompt
-        : `${scenario.prompt}\n\nThis closed factual rubric needs complete producer Evidence in the transcript. Request complete detail on each initial application analysis when supported; summary or view records alone are not accepted by this rubric.\n\n${answerInstructions}`,
-      scenario.approvedTools ?? [],
+    const execution = await runClient(
+      evaluationEnvironment,
+      await prepared.arguments(
+        answerInstructions.length === 0
+          ? scenario.prompt
+          : `${scenario.prompt}\n\nThis closed factual rubric needs complete producer Evidence in the transcript. Request complete detail on each initial application analysis when supported; summary or view records alone are not accepted by this rubric.\n\n${answerInstructions}`,
+        scenario.approvedTools ?? [],
+      ),
+      scenario.id,
     );
     const transcriptDirectory = process.env.REA_AGENT_EVAL_TRANSCRIPT_DIR;
     if (transcriptDirectory !== undefined) {
@@ -274,8 +272,8 @@ try {
         `${execution.events.map((event) => JSON.stringify(event)).join("\n")}\n`,
       );
     }
-    const metrics = evaluateCodexEvents(
-      execution.events,
+    const metrics = evaluateAgentTranscript(
+      parseAgentTranscript(client.id, execution.events),
       scenario.expectedFirstTool,
       {
         requireEvidence: scenario.requiresEvidence,
@@ -313,17 +311,22 @@ try {
 
   const factualCorrectness = summarizeFactualCorrectness(results);
   const summary = {
-    schemaVersion: 4,
+    schemaVersion: 5,
     evaluationScope: "routing_workflow_and_configured_fixture_claims",
     factualCorrectness,
     verifier_run: await completeVerifierRun(verifierRun),
-    codex,
-    codexVersion,
+    client: client.id,
+    clientCommand: client.command,
+    clientVersion,
+    ...(client.id === "codex"
+      ? { codex: client.command, codexVersion: clientVersion }
+      : {}),
     model: optionalModel ?? null,
     installation: {
-      method: "rea_setup_codex",
+      method: `rea_setup_${client.setupClient}`,
       isolatedHome: true,
-      isolatedCodexHome: true,
+      isolatedClientHome: true,
+      ...(client.id === "codex" ? { isolatedCodexHome: true } : {}),
       skillVersion: PRODUCT_IDENTITY.skillVersion,
       authentication: "caller_auth_only_removed_after_run",
     },
@@ -379,10 +382,39 @@ try {
       `Agent routing/workflow/answer checks failed: ${failed.map(({ id }) => id).join(", ")}`,
     );
 } finally {
-  // Even a deliberately retained fixture directory must never retain auth.
-  await rm(authPath, { force: true });
-  if (process.env.REA_AGENT_EVAL_KEEP_FIXTURES !== "true")
-    await rm(evaluationRoot, { recursive: true, force: true });
+  // Retry retained ownership before releasing credentials or the run root.
+  for (const owned of scenarioProcesses.values()) await stopScenario(owned);
+  if (scenarioProcesses.size > 0) {
+    await writeFile(
+      ownershipReceipt,
+      `${JSON.stringify(
+        {
+          schema_version: 1,
+          evaluation_root: evaluationRoot,
+          authentication_paths: authPaths,
+          processes: [...scenarioProcesses.values()].map(
+            ({ ownership, scenarioId, lastCleanup }) => ({
+              ownership,
+              scenario_id: scenarioId,
+              cleanup: lastCleanup,
+            }),
+          ),
+        },
+        null,
+        2,
+      )}\n`,
+      { mode: 0o600, flag: "wx" },
+    );
+    console.error(
+      `Agent evaluation cleanup is unresolved; retained private resources and ownership receipt: ${ownershipReceipt}`,
+    );
+    process.exitCode = 1;
+  } else {
+    // Fixture retention never retains auth after verified process cleanup.
+    await Promise.all(authPaths.map((path) => rm(path, { force: true })));
+    if (process.env.REA_AGENT_EVAL_KEEP_FIXTURES !== "true")
+      await rm(evaluationRoot, { recursive: true, force: true });
+  }
 }
 
 async function createTargets(root, includeManaged) {
@@ -457,67 +489,132 @@ function validTargetClarification(message) {
   }
 }
 
-async function runCodex(prompt, approvedTools) {
-  const arguments_ = [
-    "--no-daemon",
-    "exec",
-    "--ephemeral",
-    "--skip-git-repo-check",
-    "--sandbox",
-    "read-only",
-    "--json",
-    "--color",
-    "never",
-    "-C",
-    evaluationRoot,
-    "-c",
-    'approval_policy="never"',
-    ...approvedTools.flatMap((name) => [
-      "-c",
-      `mcp_servers.rea.tools.${name}.approval_mode="approve"`,
-    ]),
-    ...(optionalModel === undefined ? [] : ["--model", optionalModel]),
-    prompt,
-  ];
-  const child = spawn(codex, arguments_, {
+/**
+ * Run one client scenario as an owned process tree. The client and the REA MCP
+ * server it starts inherit a scenario run token; timeout or completion ends
+ * with token-verified cleanup of every owned process before the run continues.
+ */
+async function runClient(env, arguments_, scenarioId) {
+  // Processes alive before launch cannot belong to this scenario. The baseline
+  // lets a token sweep find reparented MCP servers without failing on
+  // unrelated processes whose environment is unreadable.
+  const captureBaseline = await systemProcessOwnershipHost.captureBaseline?.();
+  const launch = await spawnOwnedProviderProcess({
+    command: client.command,
+    arguments: arguments_,
+    runId: `${verifierRun.run_id}-${client.id}-${scenarioId}`,
+    expectedCommand: null,
     cwd: evaluationRoot,
-    env: evaluationEnvironment,
-    stdio: ["ignore", "pipe", "pipe"],
+    env,
+    // The allowlisted environment is complete; nothing else is inherited.
+    hostEnvironment: {},
   });
-  const events = [];
-  const stderr = [];
-  const lines = createInterface({ input: child.stdout });
-  const linesClosed = new Promise((resolveClose) =>
-    lines.once("close", resolveClose),
+  const ownership = {
+    ...launch.ownership,
+    sweepTokenOwnedProcesses: true,
+    ...(captureBaseline === undefined ? {} : { captureBaseline }),
+  };
+  const owned = {
+    ownership,
+    scenarioId,
+    supervisor: undefined,
+    stop: () => launch.cleanup?.() ?? cleanupOwnedProcessGroup(ownership),
+    lastCleanup: undefined,
+  };
+  // Register immediately after launch, before stream or supervisor preparation can fail.
+  scenarioProcesses.set(ownership.runId, owned);
+  const supervisor = new ProviderProcessSupervisor(
+    {
+      ...launch,
+      ownsProcessLifetime: true,
+      cleanup: owned.stop,
+    },
+    { captureStdout: false, maxDiagnosticBytes: 32_768 },
   );
+  owned.supervisor = supervisor;
+  const events = [];
+  const nonJson = [];
+  const lines = createInterface({ input: launch.process.stdout });
   lines.on("line", (line) => {
     try {
       events.push(JSON.parse(line));
     } catch {
-      stderr.push(`non-json stdout: ${line}`);
+      if (nonJson.join("").length < 32_768)
+        nonJson.push(`non-json stdout: ${line}\n`);
     }
   });
-  child.stderr.on("data", (chunk) => {
-    if (stderr.join("").length < 32_768) stderr.push(chunk.toString("utf8"));
-  });
-  const exitCode = await new Promise((resolveExit, reject) => {
-    const timeout = setTimeout(() => {
-      child.kill("SIGTERM");
-      reject(
-        new Error(`Codex evaluation timed out after ${String(timeoutMs)}ms`),
+  let exited = false;
+  let stopped;
+  try {
+    exited = await supervisor.waitForExit(timeoutMs);
+    if (exited) await supervisor.waitForOutputClose(5_000);
+  } finally {
+    // Owned descendants are stopped even when waiting failed.
+    stopped = await stopScenario(owned);
+    lines.close();
+  }
+  if (!stopped.cleaned)
+    throw new Error(
+      `${client.id} process cleanup incomplete; ownership and resources retained at ${evaluationRoot}: ${JSON.stringify(stopped)}`,
+    );
+  if (!exited)
+    throw new Error(
+      `${client.id} evaluation timed out after ${String(timeoutMs)}ms`,
+    );
+  const snapshot = supervisor.snapshot();
+  return {
+    events,
+    exitCode: snapshot.exitCode ?? 1,
+    stderr: `${nonJson.join("")}${snapshot.stderr.text}`.slice(0, 32_768),
+  };
+}
+
+/** Stop the launcher, then observe owned descendants rather than equating signal delivery with exit. */
+async function stopScenario(owned) {
+  try {
+    // A previously verified signal request may still have left descendants alive.
+    // Retry through the ownership primitive, which revalidates every live candidate.
+    if (owned.lastCleanup !== undefined) await owned.stop();
+    const stopped =
+      owned.supervisor === undefined
+        ? await owned.stop()
+        : await owned.supervisor.stop();
+    const deadline = performance.now() + 5_000;
+    let verification;
+    do {
+      verification = await verifyNoTokenOwnedProcesses(
+        owned.ownership.runId,
+        systemProcessOwnershipHost,
+        owned.ownership.captureBaseline,
+        owned.ownership,
       );
-    }, timeoutMs);
-    child.once("error", (cause) => {
-      clearTimeout(timeout);
-      reject(cause);
-    });
-    child.once("exit", (code) => {
-      clearTimeout(timeout);
-      resolveExit(code ?? 1);
-    });
-  });
-  await linesClosed;
-  return { events, exitCode, stderr: stderr.join("").slice(0, 32_768) };
+      if (verification.cleaned) break;
+      await delay(100);
+    } while (performance.now() < deadline);
+    const stoppedCleanly =
+      owned.supervisor === undefined
+        ? stopped.cleaned
+        : stopped.status === "verified-cleanup" ||
+          stopped.status === "already-exited";
+    const result = {
+      cleaned: stoppedCleanly && verification.cleaned,
+      stopped,
+      verification,
+    };
+    owned.lastCleanup = result;
+    if (result.cleaned) {
+      scenarioProcesses.delete(owned.ownership.runId);
+      owned.supervisor?.dispose();
+    }
+    return result;
+  } catch (cause) {
+    const result = {
+      cleaned: false,
+      reason: cause instanceof Error ? cause.message : String(cause),
+    };
+    owned.lastCleanup = result;
+    return result;
+  }
 }
 
 async function runProcess(
@@ -554,8 +651,9 @@ async function runProcess(
     throw new Error(`${command} failed with ${String(code)}: ${stderr}`);
 }
 
-async function readCommandVersion(command) {
+async function readCommandVersion(command, environment) {
   const child = spawn(command, ["--version"], {
+    env: environment,
     cwd: repositoryRoot,
     stdio: ["ignore", "pipe", "pipe"],
   });

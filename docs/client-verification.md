@@ -419,14 +419,22 @@ Chrome CI include this verifier. See [module relationships](website-module-trace
 ## Agent evaluation and conformance records
 
 Evaluate native, JavaScript, managed and browser investigation tasks through a
-real local Codex CLI with:
+real local agent client with:
 
 ```bash
 npm run verify:agent
 ```
 
-The lane runs scenarios sequentially in standalone Codex (`--no-daemon`) with a
-disposable HOME and CODEX_HOME under `~/.cache/rea-agent-evaluations/`. Set
+Codex is the default client. Set `REA_AGENT_EVAL_CLIENT` to `claude-code` or
+`gemini-cli` to run the same scenarios, fixture claims and gates through Claude
+Code or Gemini CLI. Each client's transcript is parsed once into a
+client-neutral record of MCP calls, results, final answer and token usage, and
+the same grader evaluates every client. Reports record the selected `client`,
+so results from different clients can be compared.
+
+The lane runs scenarios sequentially with a disposable HOME and client profile
+(CODEX_HOME, CLAUDE_CONFIG_DIR, or GEMINI_CLI_HOME) under
+`~/.cache/rea-agent-evaluations/`. Codex runs standalone (`--no-daemon`). Set
 `REA_AGENT_EVAL_ROOT` to choose another parent directory outside the OS temporary
 directory: current Codex refuses helper aliases under `/tmp`, preventing shell
 commands and skill reads even if MCP works. Each owned run directory is removed
@@ -434,9 +442,44 @@ after verification unless fixture retention is requested. The lane
 installs the packaged skill and MCP registration through public `rea setup`,
 rather than copying a skill into a project that also inherits the caller's
 skills and configuration. Only authentication is copied, when present, and it
-is removed even with `REA_AGENT_EVAL_KEEP_FIXTURES=true`. No user configuration,
+is removed after verified process cleanup even with `REA_AGENT_EVAL_KEEP_FIXTURES=true`. No user configuration,
 rules, plugins or history is copied; shell snapshots and additional agents are
 disabled. Existing API-key environment authentication remains available.
+Authentication is the client's credential file (`auth.json`,
+`.credentials.json`, or `.gemini/oauth_creds.json`) or its API key
+(`OPENAI_API_KEY`/`CODEX_API_KEY`, `ANTHROPIC_API_KEY` or `GEMINI_API_KEY`).
+The client environment is built from an allowlist of host, locale,
+temporary-directory, proxy, certificate and session-keyring variables, plus the
+selected client's own API key and endpoint (`ANTHROPIC_BASE_URL` or
+`GOOGLE_GEMINI_BASE_URL`); other credentials and configuration are not
+inherited. Copied credential files are registered for removal before they are
+written. Each scenario runs as an owned process tree with its own run token;
+completion or timeout ends with token-verified cleanup of the client and the
+REA MCP server it started. Cleanup waits for token-owned descendants to disappear
+and retries retained ownership before releasing files. If cleanup remains
+unverified, the run fails and retains its private root, credential paths, and
+`process-ownership.json` receipt for token-verified recovery; the receipt does not
+store environment values. Claude Code also disables account-level
+claude.ai connectors. Gemini CLI reuses the caller's selected
+authentication type unless `GEMINI_API_KEY` is nonempty. Its OAuth file is copied
+only when OAuth is selected; an API key Gemini CLI keeps in the OS keychain is
+used in place rather than copied.
+
+Codex runs in its read-only sandbox with `approval_policy="never"`. Claude Code
+and Gemini CLI receive an explicit allow-list instead. It contains REA tools
+whose audited annotations are read-only, or neither destructive nor open-world,
+plus the scenario's approved tools. Claude Code is limited to its read-only
+built-ins (`Read`, `Grep`, `Glob`, `Skill`, `ToolSearch` and `WaitForMcpServers`) in `dontAsk` mode.
+Gemini CLI runs headless in its default approval mode, which refuses shell and
+edit tools, with an allow-list policy file. The policy also allows `activate_skill` so the installed
+REA skill can load. Other REA tools are refused by the
+client. Gemini CLI's stream output retains only MCP text content, so Evidence
+delivery there depends on REA's complete JSON text block. Its failed MCP results carry a generic client
+message instead of REA's error record, so validation failures there are counted
+from the arguments against the named REA contract.
+The browser scenario explicitly approves `list_browser_targets` for its selected
+local debugging endpoint. The client version preflight receives the same
+allowlisted base environment without authentication additions.
 The native missing-provider scenario preapproves only `open_binary` and
 `close_binary` in the disposable client so it reaches REA's actual provider
 boundary instead of stopping at Codex approval. This does not validate a real
@@ -447,7 +490,8 @@ scenario IDs. `asar-zh` exercises the packaged desktop rubric from a Chinese
 request. `javascript-module-view` exercises summary analysis, module paging and
 item inspection in a tree with unrelated modules; its routing and text checks
 remain heuristic, so review the retained transcript for selector choice and
-coverage claims. Set `REA_CODEX_CLI` to an installed Codex executable and
+coverage claims. Set `REA_CODEX_CLI`, `REA_VERIFY_CLAUDE_COMMAND` or
+`REA_VERIFY_GEMINI_COMMAND` to an installed client executable and
 `REA_AGENT_EVAL_MODEL` to an account-supported model. Use an external resource
 limit for the whole process tree when testing on a constrained host; a Node
 heap limit alone does not bound client and child-process memory.
@@ -492,6 +536,8 @@ and token-use gates. Configured factual scenarios additionally require a factual
 pass. Their answer-text heuristics are diagnostic and do not affect the gate.
 Validation counts include complete text-only REA `invalid_request` envelopes
 and failed SDK calls whose arguments violate the named current REA contract.
+A call whose result the client never reported, or reported inconsistently,
+is not counted as a completed workflow step.
 Client approval rejections and provider unavailability remain distinct failures;
 truncated JSON previews are not parsed into invented error codes.
 Repeated `binary_session` observations separated by a successful `open_binary`
@@ -504,7 +550,12 @@ presence. These metrics can still accept fabricated prose and must not be read
 as factual assessments. Set `REA_AGENT_EVAL_TRANSCRIPT_DIR` to retain complete
 tool results and final answers for review.
 
-Report schema version 4 adds negative routing scenarios with nullable
+Report schema version 5 adds the selected `client`, `clientCommand` and
+`clientVersion`, and names the setup method `rea_setup_<client>`. Codex reports
+keep `codex`, `codexVersion` and `isolatedCodexHome`. Input token counts include
+cached input for every client; Claude Code's separate cache-creation and
+cache-read counts are added to its uncached input.
+Version 4 adds negative routing scenarios with nullable
 `expectedFirstTool` and a `targetClarificationPassed` outcome. Consumers must
 allow an expected absence of REA calls; this does not make an analysis scenario
 pass without its required tools. Version 3 changed the top-level
