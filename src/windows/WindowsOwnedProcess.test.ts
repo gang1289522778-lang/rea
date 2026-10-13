@@ -1,5 +1,5 @@
 import { once } from "node:events";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
 
 import type { WindowsNativeAuthority } from "./WindowsNativeLoader.js";
 import {
@@ -80,7 +80,25 @@ const authority = (
               }
             : {}),
         };
-      if (operation === "process_poll") return polls.shift();
+      if (operation === "process_poll") {
+        const observed = polls.shift();
+        if (observed instanceof Error) throw observed;
+        return observed;
+      }
+      if (operation === "process_terminate") {
+        polls.splice(
+          0,
+          polls.length,
+          options.jobMemoryLimit === true
+            ? {
+                ...settledPoll,
+                memoryLimitReached: false,
+                peakJobMemoryBytes: 0,
+              }
+            : settledPoll,
+        );
+        return true;
+      }
       if (operation === "process_close") return null;
       throw new Error(`Unmodeled native operation ${operation}`);
     },
@@ -104,6 +122,96 @@ const launch = (
     },
   );
 
+describe("Windows Job Object lifecycle and poll ownership", () => {
+  it("keeps polling a job after a transient observation failure", async () => {
+    vi.useFakeTimers();
+    const { native, calls } = authority({
+      polls: [new Error("transient poll failure"), settledPoll],
+    });
+    const child = launch(native);
+    let closed = false;
+    child.once("close", () => {
+      closed = true;
+    });
+
+    try {
+      await vi.advanceTimersByTimeAsync(300);
+      expect(closed).toBe(true);
+      expect(
+        calls.filter(({ operation }) => operation === "process_poll"),
+      ).toHaveLength(2);
+      expect(calls.at(-1)?.operation).toBe("process_close");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("bounds repeated poll failures while retaining the job for explicit cleanup retry", async () => {
+    vi.useFakeTimers();
+    const original = authority({
+      polls: [
+        new Error("persistent"),
+        new Error("persistent"),
+        new Error("persistent"),
+        settledPoll,
+      ],
+    });
+    const native: WindowsNativeAuthority = {
+      ...original.native,
+      call: (operation, arguments_) =>
+        operation === "process_terminate"
+          ? true
+          : original.native.call(operation, arguments_),
+    };
+    const child = launch(native);
+    try {
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(
+        original.calls.filter(({ operation }) => operation === "process_poll"),
+      ).toHaveLength(3);
+      expect(
+        original.calls.some(({ operation }) => operation === "process_close"),
+      ).toBe(false);
+      expect(vi.getTimerCount()).toBe(1);
+      const closing = child.cleanup();
+      await vi.advanceTimersByTimeAsync(25);
+      expect(await closing).toEqual({ cleaned: true, signaled: true });
+      expect(vi.getTimerCount()).toBe(0);
+      expect(
+        original.calls.filter(({ operation }) => operation === "process_close"),
+      ).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("emits close only after descendants leave the Job Object", async () => {
+    const { native, calls } = authority({
+      polls: [
+        {
+          ...settledPoll,
+          stdoutEnded: false,
+          stderrEnded: false,
+          activeProcesses: 1,
+        },
+        settledPoll,
+      ],
+    });
+    const child = launch(native);
+    const events: string[] = [];
+    child.once("exit", () => events.push("exit"));
+    child.once("close", () => events.push("close"));
+
+    await once(child, "close");
+
+    expect(events).toEqual(["exit", "close"]);
+    expect(
+      calls.filter(({ operation }) => operation === "process_poll"),
+    ).toHaveLength(2);
+    expect(calls.at(-1)?.operation).toBe("process_close");
+  });
+});
+
 describe("Windows Job Object memory limits", () => {
   it("refuses a requested limit before launch when the artifact lacks the control", () => {
     const { native, calls } = authority();
@@ -121,6 +229,7 @@ describe("Windows Job Object memory limits", () => {
       ],
     });
     const child = launch(native);
+    onTestFinished(() => child.cleanup());
     const failure = once(child, "error");
     expect(calls[0]?.arguments_).toHaveLength(4);
     const [error] = await failure;
@@ -165,6 +274,7 @@ describe("Windows Job Object memory limits", () => {
       polls: [settledPoll],
     });
     const child = launch(native, LIMIT);
+    onTestFinished(() => child.cleanup());
     const [error] = await once(child, "error");
     expect(error).toBeInstanceOf(Error);
     expect(child.memoryLimitReached).toBe(false);

@@ -273,6 +273,7 @@ export class ProviderProcessSupervisor {
     this.#recordExit(code, signal);
     this.#outputClosed = true;
     this.#outputClose.resolve(undefined);
+    if (this.#disposeAfterOutputClose) this.dispose();
   };
   readonly #onError = (cause: Error): void => {
     this.#options.onDiagnostic?.({ type: "error", message: cause.message });
@@ -280,12 +281,15 @@ export class ProviderProcessSupervisor {
   #exitObservation: ProviderProcessExitObservation | undefined;
   #stopPromise: Promise<ProviderProcessStopResult> | undefined;
   #disposed = false;
+  #disposeAfterOutputClose = false;
+  #maxDiagnosticBytes: number | undefined;
 
   constructor(
     readonly launch: ProviderProcessLaunch,
     options: ProviderProcessSupervisorOptions = {},
   ) {
     this.#options = options;
+    this.#maxDiagnosticBytes = options.maxDiagnosticBytes;
     if (options.captureStdout !== false)
       this.#attach(launch.process.stdout, "stdout");
     this.#attach(launch.process.stderr, "stderr");
@@ -338,13 +342,49 @@ export class ProviderProcessSupervisor {
     );
   }
 
-  /** Wait until the producer has closed its output streams; exit alone does not prove complete output. */
+  /** Wait until output streams close; WindowsOwnedProcess closes only after its whole Job Object settles. */
   async waitForOutputClose(timeoutMs: number): Promise<boolean> {
     return waitForProcessEvent(
       this.#outputClosed,
       this.#outputClose.promise,
       timeoutMs,
     );
+  }
+
+  /** Bound additional retained bytes while still draining all later output. */
+  limitAdditionalOutputBytes(maxBytes: number): void {
+    if (!Number.isSafeInteger(maxBytes) || maxBytes < 0)
+      throw new RangeError(
+        "Additional output limit must be a non-negative safe integer.",
+      );
+    const retained = this.#stdout.bytes + this.#stderr.bytes;
+    const requestedLimit = Math.min(
+      Number.MAX_SAFE_INTEGER,
+      retained + maxBytes,
+    );
+    this.#maxDiagnosticBytes =
+      this.#maxDiagnosticBytes === undefined
+        ? requestedLimit
+        : Math.min(this.#maxDiagnosticBytes, requestedLimit);
+  }
+
+  /** Unreference inherited output pipes without closing streams shared with descendants. */
+  unrefOutputStreams(): void {
+    for (const stream of [
+      this.launch.process.stdout,
+      this.launch.process.stderr,
+    ]) {
+      const unref = (stream as (Readable & { unref?: () => void }) | null)
+        ?.unref;
+      unref?.call(stream);
+    }
+  }
+
+  /** Keep capturing inherited output, then detach listeners when every writer closes. */
+  disposeAfterOutputClose(): void {
+    if (this.#disposed) return;
+    if (this.#outputClosed) this.dispose();
+    else this.#disposeAfterOutputClose = true;
   }
 
   /** Share each stop attempt; incomplete cleanup retains ownership and permits retry. */
@@ -487,13 +527,11 @@ export class ProviderProcessSupervisor {
     if (stream === "stdout") this.#stdoutObservedBytes += bytes.byteLength;
     else this.#stderrObservedBytes += bytes.byteLength;
     const remaining =
-      this.#options.maxDiagnosticBytes === undefined
+      this.#maxDiagnosticBytes === undefined
         ? bytes.byteLength
         : Math.max(
             0,
-            this.#options.maxDiagnosticBytes -
-              this.#stdout.bytes -
-              this.#stderr.bytes,
+            this.#maxDiagnosticBytes - this.#stdout.bytes - this.#stderr.bytes,
           );
     const retained = Math.min(bytes.byteLength, remaining);
     if (retained < bytes.byteLength) this.#diagnosticTruncated = true;
