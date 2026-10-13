@@ -56,6 +56,7 @@ const subjectFormatSchema = z.enum([
   "hsp",
   "app-pack",
   "asar",
+  "ines",
   "dmg",
   "pkg",
   "plist",

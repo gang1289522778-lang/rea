@@ -1,11 +1,23 @@
-import { sameRegularFileState } from "../../filesystem/RegularFile.js";
+import { readFileHandlePrefix } from "../../filesystem/readFileHandlePrefix.js";
+import {
+  sameRegularFileState,
+  verifyRegularFileState,
+  RegularFileChangedError,
+} from "../../filesystem/RegularFile.js";
 import type { FileHandle } from "node:fs/promises";
 import type { Stats } from "node:fs";
 import type { StableRegularFileDescriptor } from "../../filesystem/RegularFile.js";
 import type { OwnedFileHandle } from "../../filesystem/OwnedFileHandle.js";
 
 import { classifyArtifactContent } from "./ArtifactGraphConstruction.js";
-import { ARTIFACT_CLASSIFICATION_PREFIX_BYTES } from "../ArtifactHash.js";
+import {
+  nesContainerFormat,
+  parseInesLayout,
+} from "../../domain/inesContainer.js";
+import {
+  abortIfNeeded,
+  ARTIFACT_CLASSIFICATION_PREFIX_BYTES,
+} from "../ArtifactHash.js";
 import type { ArtifactOccurrence } from "../../domain/artifactGraph.js";
 import {
   hasZipSignature,
@@ -41,7 +53,10 @@ export const classifyAndHashRoot = async (
   path: string,
   directory: boolean,
   expectedMetadata: Stats,
-  options: Pick<ArtifactInventoryOptions, "resourceScope" | "signal">,
+  options: Pick<
+    ArtifactInventoryOptions,
+    "resourceScope" | "signal" | "admitRootFormat"
+  >,
 ): Promise<RootClassification> => {
   return options.resourceScope.run(async () => {
     const result = await classifyAndHashRootForInventory(
@@ -71,15 +86,21 @@ export const classifyAndHashRoot = async (
   });
 };
 
-/** Classify a root and retain its admitted ZIP descriptor for child inventory. */
+/** Classify a root and retain its admitted container descriptor for child inventory. */
 export const classifyAndHashRootForInventory = async (
   path: string,
   directory: boolean,
   expectedMetadata: Stats,
-  options: Pick<ArtifactInventoryOptions, "resourceScope" | "signal">,
+  options: Pick<
+    ArtifactInventoryOptions,
+    "resourceScope" | "signal" | "admitRootFormat"
+  >,
 ): Promise<RootInventoryClassification> => {
-  if (directory)
+  abortIfNeeded(options.signal);
+  if (directory) {
+    options.admitRootFormat?.("directory");
     return { format: "directory", digest: null, rootSource: undefined };
+  }
   const ownedHandle = await openRootArtifact(
     path,
     options.resourceScope,
@@ -99,12 +120,20 @@ export const classifyAndHashRootForInventory = async (
     | { readonly kind: "failed"; readonly cause: unknown };
   try {
     const initial = await handle.stat();
+    abortIfNeeded(options.signal);
     if (!sameRegularFileState(expectedMetadata, initial))
       throw new ArtifactReaderFailure(
         "integrity",
         `Root artifact changed before inventory: ${path}`,
       );
-    const format = await classifyRootFormat(path, handle);
+    const format = await classifyRootFormat(
+      path,
+      handle,
+      initial,
+      options.signal,
+    );
+    abortIfNeeded(options.signal);
+    options.admitRootFormat?.(format);
     const digest = await hashStableRootArtifactHandle(
       path,
       handle,
@@ -112,7 +141,9 @@ export const classifyAndHashRootForInventory = async (
       options.signal,
     );
     const retainSource =
-      isZipPackageFormat(format) || format === "mach-o-universal";
+      isZipPackageFormat(format) ||
+      format === "mach-o-universal" ||
+      format === "ines";
     outcome = {
       kind: "completed",
       value: {
@@ -124,7 +155,23 @@ export const classifyAndHashRootForInventory = async (
       },
     };
   } catch (cause: unknown) {
-    outcome = { kind: "failed", cause };
+    outcome = {
+      kind: "failed",
+      cause:
+        options.signal?.aborted === true
+          ? new ArtifactReaderFailure(
+              "cancelled",
+              "Artifact inventory cancelled",
+              { cause },
+            )
+          : cause instanceof RegularFileChangedError
+            ? new ArtifactReaderFailure(
+                "integrity",
+                `Root artifact changed during inventory: ${path}`,
+                { cause: cause.cause ?? cause },
+              )
+            : cause,
+    };
   }
   if (outcome.kind === "failed" || outcome.value.rootSource === undefined) {
     const cleanupAttempt = await options.resourceScope.release(owner);
@@ -144,10 +191,23 @@ export const classifyAndHashRootForInventory = async (
 const classifyRootFormat = async (
   path: string,
   handle: FileHandle,
+  initial: Stats,
+  signal?: AbortSignal,
 ): Promise<ArtifactOccurrence["artifact_format"]> => {
-  const magic = Buffer.alloc(ARTIFACT_CLASSIFICATION_PREFIX_BYTES);
-  const observed = await handle.read(magic, 0, magic.length, 0);
-  const prefix = magic.subarray(0, observed.bytesRead);
+  abortIfNeeded(signal);
+  const prefix = await readFileHandlePrefix(
+    handle,
+    ARTIFACT_CLASSIFICATION_PREFIX_BYTES,
+    () => abortIfNeeded(signal),
+  );
+  abortIfNeeded(signal);
+  await verifyRegularFileState(path, { handle, initial });
+  abortIfNeeded(signal);
+  if (nesContainerFormat(prefix) !== undefined) {
+    const parsed = parseInesLayout(prefix, initial.size);
+    if (!parsed.ok) throw new ArtifactReaderFailure("format", parsed.error);
+    return "ines";
+  }
   const lower = path.toLowerCase();
   if (hasZipSignature(prefix)) return zipRootPackageFormat(lower);
   if (

@@ -82,7 +82,6 @@ it("rolls back when cancellation arrives while closing the materialization reade
       materializeArtifactInventory(
         {
           inputPath: source,
-          inputFormat: "asar",
           outputRoot: output,
           environment: process.env,
           integrityPolicy: "fail",
@@ -172,7 +171,6 @@ const inventoriedExtraction = async (source: string, output: string) => {
     materializeArtifactInventory(
       {
         inputPath: source,
-        inputFormat: "asar",
         outputRoot: output,
         environment: process.env,
         integrityPolicy: "fail",

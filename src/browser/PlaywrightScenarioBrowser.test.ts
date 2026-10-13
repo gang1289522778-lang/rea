@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import type { Browser } from "playwright-core";
 
 import { browserScenarioSchema } from "../domain/browserScenario.js";
+import { PLAYWRIGHT_SCENARIO_CLEANUP_TIMEOUT_MS } from "./PlaywrightExecutionBoundary.js";
 import {
   attachedScenarioLeaseKey,
   openPlaywrightScenarioBrowser,
@@ -144,6 +145,35 @@ it("keeps attached-target ownership until cancelled cleanup actually settles", a
   expect(settled).toEqual([true]);
 });
 
+it("waits for bounded event finalization and owned browser teardown", async () => {
+  vi.useFakeTimers();
+  try {
+    const closeBrowser = vi.fn(
+      () => new Promise<void>((resolve) => setTimeout(resolve, 1_500)),
+    );
+    const removeProfile = vi.fn(async () => undefined);
+    const cleanup = new PlaywrightScenarioBrowserCleanupOwner({
+      closeBrowser,
+      removeProfile,
+    });
+    const finished = cleanup
+      .close(() => new Promise<void>((resolve) => setTimeout(resolve, 4_500)))
+      .then(
+        () => ({ ok: true }),
+        (cause: unknown) => ({ ok: false, cause }),
+      );
+    await vi.advanceTimersByTimeAsync(4_500);
+    expect(removeProfile).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(await finished).toEqual({ ok: true });
+    expect(cleanup.browserClosed).toBe(true);
+    expect(closeBrowser).toHaveBeenCalledOnce();
+    expect(removeProfile).toHaveBeenCalledOnce();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 it("keeps attached-target ownership after the cleanup response timeout", async () => {
   vi.useFakeTimers();
   try {
@@ -164,7 +194,7 @@ it("keeps attached-target ownership after the cleanup response timeout", async (
       cleanup: { reason: expect.stringContaining("timed out") },
     });
     await closeStarted.promise;
-    await vi.advanceTimersByTimeAsync(1_000);
+    await vi.advanceTimersByTimeAsync(PLAYWRIGHT_SCENARIO_CLEANUP_TIMEOUT_MS);
     await timeoutExpectation;
     expect(settled).toEqual([]);
 

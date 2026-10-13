@@ -8,7 +8,10 @@ import type { BrowserScenario } from "../domain/browserScenario.js";
 import { AnalysisError } from "../domain/analysisErrorBase.js";
 import { isLiteralLoopbackHostname } from "../domain/browserObservation.js";
 import { BrowserObservationError } from "../domain/browserObservationError.js";
-import { withPlaywrightExecutionBoundary } from "./PlaywrightExecutionBoundary.js";
+import {
+  PLAYWRIGHT_SCENARIO_CLEANUP_TIMEOUT_MS,
+  withPlaywrightExecutionBoundary,
+} from "./PlaywrightExecutionBoundary.js";
 
 const OPERATION = "capture_browser_scenario" as const;
 
@@ -71,7 +74,11 @@ export class PlaywrightScenarioBrowserCleanupOwner {
     signal?: AbortSignal,
   ): Promise<void> {
     try {
-      await withPlaywrightExecutionBoundary(() => cleanup, 1_000, signal);
+      await withPlaywrightExecutionBoundary(
+        () => cleanup,
+        PLAYWRIGHT_SCENARIO_CLEANUP_TIMEOUT_MS,
+        signal,
+      );
     } catch (cause: unknown) {
       throw new BrowserObservationError(OPERATION, "cleanup_failed", {
         cause,

@@ -14,7 +14,10 @@ import { performPlaywrightScenarioAction } from "./PlaywrightScenarioActions.js"
 import { capturePlaywrightStepArtifacts } from "./PlaywrightScenarioArtifacts.js";
 import { PlaywrightScenarioEvents } from "./PlaywrightScenarioEvents.js";
 import { PlaywrightScenarioStorage } from "./PlaywrightScenarioStorage.js";
-import { withPlaywrightExecutionBoundary } from "./PlaywrightExecutionBoundary.js";
+import {
+  PLAYWRIGHT_SCENARIO_CLEANUP_TIMEOUT_MS,
+  withPlaywrightExecutionBoundary,
+} from "./PlaywrightExecutionBoundary.js";
 import {
   browserScenarioCaptureData,
   browserScenarioOperationFailure,
@@ -148,13 +151,17 @@ export class PlaywrightScenarioSession implements BrowserScenarioSessionPort {
         options.signal,
       );
     } catch (cause: unknown) {
+      // Resource release outlives the cancelled request, including retained retries.
       const lateCleanup = () =>
         opening.then(
-          (lateOpened) => lateOpened.cleanup.close(undefined, options.signal),
+          (lateOpened) => lateOpened.cleanup.close(),
           () => undefined,
         );
       options.retainCleanup?.(() =>
-        withPlaywrightExecutionBoundary(lateCleanup, 1_000),
+        withPlaywrightExecutionBoundary(
+          lateCleanup,
+          PLAYWRIGHT_SCENARIO_CLEANUP_TIMEOUT_MS,
+        ),
       );
       void lateCleanup().catch((cleanupCause: unknown) => {
         // best-effort cleanup: retainCleanup keeps the retry capability.
@@ -280,7 +287,6 @@ export class PlaywrightScenarioSession implements BrowserScenarioSessionPort {
             events === undefined
               ? undefined
               : () => events?.finish() ?? Promise.resolve(),
-            options.signal,
           );
         } catch (failure: unknown) {
           browserFailure = { cause: failure };

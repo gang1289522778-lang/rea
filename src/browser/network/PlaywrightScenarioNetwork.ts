@@ -4,6 +4,7 @@ import type {
 } from "../../domain/browserNetworkEvidence.js";
 import type { BrowserScenarioEvent } from "../../domain/browserScenarioCaptureValues.js";
 import type { BrowserScenarioSecrets } from "../BrowserScenarioSecrets.js";
+import { PLAYWRIGHT_NETWORK_READ_TIMEOUT_MS } from "../PlaywrightExecutionBoundary.js";
 import {
   captureNetworkBody,
   captureNetworkHeaders,
@@ -76,7 +77,7 @@ export class PlaywrightScenarioNetwork {
 
   constructor(private readonly options: NetworkCaptureOptions) {
     this.readOptions = {
-      timeoutMs: options.readTimeoutMs ?? 5_000,
+      timeoutMs: options.readTimeoutMs ?? PLAYWRIGHT_NETWORK_READ_TIMEOUT_MS,
       ...(options.signal === undefined ? {} : { signal: options.signal }),
     };
   }

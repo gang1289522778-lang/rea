@@ -246,16 +246,19 @@ describe("binary target I/O: package classification", () => {
     });
   });
 
-  it("classifies a binary plist by its magic under any extension", async () => {
-    const directory = await createTestTempDirectory("rea-bplist-target-");
-    const path = join(directory, "Model.archive");
-    await writeFile(path, buildBinary({ $archiver: "NSKeyedArchiver" }));
-    const result = await parseBinaryTarget(path);
-    expect(result.ok && result.value).toMatchObject({
-      kind: "artifact",
-      format: "plist",
-    });
-  });
+  it.each(["archive", "hop"])(
+    "classifies binary plist magic under a .%s extension",
+    async (suffix) => {
+      const directory = await createTestTempDirectory("rea-bplist-target-");
+      const path = join(directory, `Model.${suffix}`);
+      await writeFile(path, buildBinary({ $archiver: "NSKeyedArchiver" }));
+      const result = await parseBinaryTarget(path);
+      expect(result.ok && result.value).toMatchObject({
+        kind: "artifact",
+        format: "plist",
+      });
+    },
+  );
 
   it("does not trust a ZIP-family extension without ZIP magic", async () => {
     const directory = await createTestTempDirectory("rea-fake-archive-");
@@ -275,6 +278,10 @@ describe("binary target I/O: filesystem and app bundle target resolution", () =>
     await writeFile(join(directory, "sample.hop"), "database");
     await writeFile(join(directory, "text"), "hello");
     const database = await parseBinaryTarget("sample.hop", { cwd: directory });
+    expect(database).toMatchObject({
+      ok: true,
+      value: { kind: "database", format: "analysis-database" },
+    });
     expect(database.ok && database.value.sha256).toBe(
       "3549b0028b75d981cdda2e573e9cb49dedc200185876df299f912b79f69dabd8",
     );

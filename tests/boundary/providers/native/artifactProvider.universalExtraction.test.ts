@@ -7,8 +7,13 @@ import { createTestTempDirectory } from "../../../fixtures/temporaryDirectory.js
 
 import { ArtifactProvider } from "../../../../src/artifacts/ArtifactProvider.js";
 import { ArtifactReaderFailure } from "../../../../src/artifacts/ArtifactReader.js";
+import {
+  CPU,
+  fatImage,
+  machoImage,
+} from "../../../../src/artifacts/apple/MachoImage.fixture.js";
+import { parseBinaryTarget } from "../../../../src/application/BinaryTargetResolver.js";
 import { artifactExtractionExecutionSchema } from "../../../../src/contracts/artifactToolContracts.js";
-import type { BinaryTarget } from "../../../../src/domain/binaryTargetTypes.js";
 
 const sliceReader = vi.hoisted(() => ({
   reached: vi.fn(),
@@ -41,10 +46,19 @@ it("routes universal Mach-O extraction through slice inventory", async () => {
   );
   const root = await createTestTempDirectory("rea-extract-universal-");
   const image = join(root, "Universal");
-  await writeFile(image, Buffer.from([0xca, 0xfe, 0xba, 0xbe, 0, 0, 0, 0]));
+  await writeFile(
+    image,
+    fatImage([
+      { cpu: CPU.arm64, bytes: machoImage({ cpu: CPU.arm64 }) },
+      { cpu: CPU.x86_64, bytes: machoImage({ cpu: CPU.x86_64 }) },
+    ]),
+  );
+  const target = await parseBinaryTarget(image);
+  if (!target.ok) throw target.error;
+  expect(target.value.format).toBe("mach-o-universal");
   const output = join(root, "output");
   const result = await new ArtifactProvider(process.env)
-    .createClient(universalTarget(image))
+    .createClient(target.value)
     .execute(
       "extract_artifact",
       artifactExtractionExecutionSchema.parse({ output_root: output }),
@@ -60,15 +74,4 @@ it("routes universal Mach-O extraction through slice inventory", async () => {
   });
   expect(sliceReader.reached).toHaveBeenCalledOnce();
   await expect(access(output)).rejects.toThrow();
-});
-
-const universalTarget = (path: string): BinaryTarget => ({
-  path,
-  sourcePath: path,
-  sha256: "0".repeat(64),
-  kind: "executable",
-  format: "mach-o-universal",
-  architecture: "arm64",
-  availableArchitectures: ["arm64"],
-  universalSlice: { offset: 0, size: 32 },
 });

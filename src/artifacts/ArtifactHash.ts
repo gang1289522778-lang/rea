@@ -23,10 +23,11 @@ export const abortIfNeeded = (signal?: AbortSignal): void => {
     );
 };
 
-/** Hash every stream byte and retain its bounded classification prefix. */
+/** Hash every stream byte, optionally feeding the same bytes to a scan aggregate. */
 export const hashReadable = async (
   stream: Readable,
   signal?: AbortSignal,
+  observeChunk?: (chunk: Buffer) => void,
 ): Promise<HashResult> => {
   const hash = createHash("sha256");
   const prefixes: Buffer[] = [];
@@ -37,6 +38,7 @@ export const hashReadable = async (
     const chunk = streamChunkToBuffer(raw);
     bytes += chunk.length;
     hash.update(chunk);
+    observeChunk?.(chunk);
     if (prefixBytes < ARTIFACT_CLASSIFICATION_PREFIX_BYTES) {
       const selected = chunk.subarray(
         0,

@@ -2,6 +2,14 @@ import {
   AnalysisCancelledError,
   AnalysisTimeoutError,
 } from "../domain/analysisErrorCore.js";
+import { WEB_RUNTIME_LIMITS } from "../domain/webRuntime.js";
+
+export const PLAYWRIGHT_NETWORK_READ_TIMEOUT_MS = 5_000;
+
+// Cleanup drains bounded content reads before shutting down the browser and
+// removing its profile. The outer deadline must cover both sequential stages.
+export const PLAYWRIGHT_SCENARIO_CLEANUP_TIMEOUT_MS =
+  PLAYWRIGHT_NETWORK_READ_TIMEOUT_MS + WEB_RUNTIME_LIMITS.cleanupTimeoutMs;
 
 const OPERATION = "capture_browser_scenario" as const;
 

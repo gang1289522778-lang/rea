@@ -16,5 +16,6 @@ export interface ArtifactInventorySnapshot {
     ArtifactInventoryResult["provenance"][number]
   >;
   readonly integrity_contradictions: readonly IntegrityContradiction[];
+  readonly ines?: ArtifactInventoryResult["ines"];
   readonly limitations: readonly string[];
 }

@@ -179,7 +179,7 @@ export type BinaryTarget =
   | (BinaryTargetIdentity &
       NonExecutableMetadata & {
         readonly kind: "archive";
-        readonly format: ZipPackageFormat | "asar" | "dmg" | "pkg";
+        readonly format: ZipPackageFormat | "asar" | "ines" | "dmg" | "pkg";
       })
   | (BinaryTargetIdentity &
       NonExecutableMetadata & {

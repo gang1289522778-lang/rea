@@ -1,4 +1,3 @@
-import { lstat } from "node:fs/promises";
 import type { Stats } from "node:fs";
 import type { FileHandle } from "node:fs/promises";
 import { readFileHandleChunks } from "../../filesystem/readFileHandleChunks.js";
@@ -9,7 +8,8 @@ import {
   NonRegularFileReadError,
   RegularFileAdmissionFailure,
   openRegularFile,
-  sameRegularFileState,
+  RegularFileChangedError,
+  verifyRegularFileState,
 } from "../../filesystem/RegularFile.js";
 import {
   abortIfNeeded,
@@ -23,6 +23,7 @@ export const openRootArtifact = async (
   path: string,
   resourceScope: ArtifactResourceScope,
   signal?: AbortSignal,
+  admission: "initial" | "inventoried" = "initial",
 ): Promise<OwnedFileHandle> => {
   try {
     return new OwnedFileHandle(
@@ -31,14 +32,41 @@ export const openRootArtifact = async (
   } catch (cause: unknown) {
     const primary =
       cause instanceof RegularFileAdmissionFailure ? cause.cause : cause;
+    const changed =
+      admission === "inventoried" &&
+      (primary instanceof NonRegularFileReadError ||
+        primary instanceof RegularFileChangedError ||
+        (primary instanceof Error &&
+          "code" in primary &&
+          [
+            "ENOENT",
+            "ENOTDIR",
+            "ELOOP",
+            "EISDIR",
+            "ENOTFILE",
+            "ESTALE",
+          ].includes(String(primary.code))));
+    // Normalize the primary failure before cleanup so failed closes keep both facts.
     const failure =
-      primary instanceof NonRegularFileReadError
+      signal?.aborted === true
         ? new ArtifactReaderFailure(
-            "format",
-            `Artifact root is not a regular file: ${path}`,
+            "cancelled",
+            "Artifact admission cancelled",
             { cause: primary },
           )
-        : primary;
+        : changed
+          ? new ArtifactReaderFailure(
+              "integrity",
+              `Inventoried artifact source changed: ${path}`,
+              { cause: primary },
+            )
+          : primary instanceof NonRegularFileReadError
+            ? new ArtifactReaderFailure(
+                "format",
+                `Artifact root is not a regular file: ${path}`,
+                { cause: primary },
+              )
+            : primary;
     if (cause instanceof RegularFileAdmissionFailure) {
       const resource = `root artifact descriptor for ${path}`;
       const cleanup = await resourceScope.release({
@@ -105,12 +133,20 @@ export const hashStableRootArtifactHandle = async (
     signal,
   );
   abortIfNeeded(signal);
-  const [opened, currentPath] = await Promise.all([handle.stat(), lstat(path)]);
-  if (
-    !sameRegularFileState(initial, opened) ||
-    !sameRegularFileState(initial, currentPath) ||
-    digest.bytes !== initial.size
-  )
+  try {
+    await verifyRegularFileState(path, { handle, initial });
+  } catch (cause: unknown) {
+    abortIfNeeded(signal);
+    if (cause instanceof RegularFileChangedError)
+      throw new ArtifactReaderFailure(
+        "integrity",
+        `Root artifact changed during inventory: ${path}`,
+        { cause: cause.cause ?? cause },
+      );
+    throw cause;
+  }
+  abortIfNeeded(signal);
+  if (digest.bytes !== initial.size)
     throw new ArtifactReaderFailure(
       "integrity",
       `Root artifact changed during inventory: ${path}`,

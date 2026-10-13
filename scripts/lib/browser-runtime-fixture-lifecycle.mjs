@@ -9,10 +9,13 @@ import { createSystemProcessOwnershipHost } from "../../dist/process/ProcessOwne
 import { liveProcesses } from "../../dist/process/ProcessOwnershipProcessTree.js";
 import { CdpConnection } from "../../dist/browser/CdpConnection.js";
 import { waitForBrowserDevtoolsPort } from "../../dist/browser/BrowserProcessStartup.js";
+import { discoverCdpEndpoint } from "../../dist/browser/CdpEndpoint.js";
+import { BrowserObservationError } from "../../dist/domain/browserObservationError.js";
 
-/** Launch the synthetic fixture browser and await CDP in its own verified process group. */
+/** Admit the owned fixture only after CDP serves its requested page. */
 export async function startRuntimeFixtureBrowser(executable, origin) {
   const profile = await mkdtemp(join(tmpdir(), "rea-real-web-runtime-"));
+  const deadline = performance.now() + 60_000;
   let owned;
   try {
     owned = await spawnOwnedProviderProcess({
@@ -50,7 +53,16 @@ export async function startRuntimeFixtureBrowser(executable, origin) {
       stderr: () => stderr,
       // Match the broader real-browser verifier's allowance for cold Chrome
       // startup on shared runners; early process failures still reject at once.
-      timeoutMs: 60_000,
+      timeoutMs: Math.max(1, deadline - performance.now()),
+    });
+    // Port publication can precede a responsive discovery service and renderer.
+    // Both phases share the owned fixture's startup budget; public CDP calls
+    // retain their normal per-response deadlines and failure semantics.
+    await waitForRuntimeFixturePage({
+      child: owned.process,
+      port,
+      origin,
+      deadline,
     });
     return {
       port,
@@ -65,14 +77,83 @@ export async function startRuntimeFixtureBrowser(executable, origin) {
       },
     };
   } catch (cause) {
-    if (owned !== undefined) await stopOwnedBrowser(owned, profile);
-    await rm(profile, {
-      recursive: true,
-      force: true,
-      maxRetries: 5,
-      retryDelay: 100,
-    });
+    await closeRuntimeFixtureResources(
+      [
+        async () => {
+          // Keep the profile when stopping its browser cannot be confirmed.
+          if (owned !== undefined) await stopOwnedBrowser(owned, profile);
+          await rm(profile, {
+            recursive: true,
+            force: true,
+            maxRetries: 5,
+            retryDelay: 100,
+          });
+        },
+      ],
+      cause,
+    );
     throw cause;
+  }
+}
+
+async function waitForRuntimeFixturePage({ child, port, origin, deadline }) {
+  const controller = new AbortController();
+  let lastFailure;
+  const onExit = () =>
+    controller.abort(
+      new Error(
+        "Owned runtime fixture exited before CDP discovery became ready",
+        { cause: lastFailure },
+      ),
+    );
+  const onError = (cause) => controller.abort(cause);
+  const timer = setTimeout(
+    () =>
+      controller.abort(
+        new Error(
+          "Owned runtime fixture page was not discoverable within its startup budget",
+          { cause: lastFailure },
+        ),
+      ),
+    Math.max(1, deadline - performance.now()),
+  );
+  child.once("exit", onExit);
+  child.once("error", onError);
+  try {
+    for (;;) {
+      if (child.exitCode !== null || child.signalCode !== null) onExit();
+      controller.signal.throwIfAborted();
+      try {
+        const discovery = await discoverCdpEndpoint(
+          `http://127.0.0.1:${port}`,
+          "list_browser_targets",
+          controller.signal,
+        );
+        if (
+          discovery.targets.some(
+            (target) =>
+              target.type === "page" &&
+              (target.url === origin || target.url.startsWith(`${origin}/`)),
+          )
+        )
+          return;
+      } catch (cause) {
+        controller.signal.throwIfAborted();
+        // Only transient startup failures are retryable. Invalid protocol
+        // responses and payload-limit failures must remain visible immediately.
+        if (
+          !(cause instanceof BrowserObservationError) ||
+          !["timeout", "endpoint_unreachable"].includes(cause.reason)
+        )
+          throw cause;
+        lastFailure = cause;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+  } finally {
+    clearTimeout(timer);
+    child.removeListener("exit", onExit);
+    child.removeListener("error", onError);
   }
 }
 

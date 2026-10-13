@@ -1,4 +1,5 @@
 import { isAbsolute } from "node:path";
+import { createHash, type Hash } from "node:crypto";
 
 import {
   annotateEnglishUnicodeCaseCollisions,
@@ -11,6 +12,10 @@ import {
   type ArtifactReader,
 } from "../ArtifactReader.js";
 import { AsarArtifactReader } from "../AsarArtifactReader.js";
+import {
+  InesArtifactReader,
+  type InesRegionScan,
+} from "../InesArtifactReader.js";
 import type { ArtifactNode } from "../../domain/artifactGraph.js";
 import {
   classifyArtifactContent,
@@ -55,6 +60,13 @@ interface ScanContext {
   readonly registry: ArtifactPathRegistry;
   readonly expandedContainerIds: Set<string>;
   readonly ownedReaders: ArtifactReader[];
+  readonly reconstruction:
+    | {
+        readonly hash: Hash;
+        readonly regionOrder: string[];
+        bytes: number;
+      }
+    | undefined;
 }
 
 export const scanReader = async (
@@ -67,6 +79,7 @@ export const scanReader = async (
   readonly occurrences: MutableOccurrence[];
   readonly pendingContradictions: PendingIntegrityContradiction[];
   readonly caseCollisionLimitation: string | undefined;
+  readonly inesRegionScan: InesRegionScan | undefined;
 }> => {
   const { nodes, occurrences, pendingContradictions } = emptyScan();
   if (reader === undefined)
@@ -75,6 +88,7 @@ export const scanReader = async (
       occurrences,
       pendingContradictions,
       caseCollisionLimitation: undefined,
+      inesRegionScan: undefined,
     };
   const context: ScanContext = {
     reader,
@@ -87,6 +101,10 @@ export const scanReader = async (
     registry: new ArtifactPathRegistry(),
     expandedContainerIds: new Set<string>(),
     ownedReaders,
+    reconstruction:
+      reader instanceof InesArtifactReader
+        ? { hash: createHash("sha256"), regionOrder: [], bytes: 0 }
+        : undefined,
   };
   await visitArtifactEntries(context, reader, "");
   // Archive directories may appear after their children. Resolve containment
@@ -101,6 +119,14 @@ export const scanReader = async (
     occurrences,
     pendingContradictions,
     caseCollisionLimitation: annotateEnglishUnicodeCaseCollisions(occurrences),
+    inesRegionScan:
+      context.reconstruction === undefined
+        ? undefined
+        : {
+            region_order: context.reconstruction.regionOrder,
+            bytes: context.reconstruction.bytes,
+            sha256: context.reconstruction.hash.digest("hex"),
+          },
   };
 };
 
@@ -233,10 +259,22 @@ const digestArtifactEntry = async (
 > => {
   if ((entry.kind !== "file" && entry.kind !== "slice") || entry.encrypted)
     return undefined;
+  const reconstruction =
+    currentReader === context.reader ? context.reconstruction : undefined;
+  if (reconstruction !== undefined && entry.byteOffset !== reconstruction.bytes)
+    throw new ArtifactReaderFailure("integrity", "Noncontiguous iNES regions");
   const digest = await hashReadable(
     await currentReader.open(entry, context.signal),
     context.signal,
+    reconstruction === undefined
+      ? undefined
+      : (chunk) => {
+          // Hash the same bytes used for each node, in physical region order.
+          reconstruction.hash.update(chunk);
+          reconstruction.bytes += chunk.length;
+        },
   );
+  reconstruction?.regionOrder.push(entry.path);
   const mismatched =
     entry.declaredSha256 !== null && entry.declaredSha256 !== digest.sha256;
   if (mismatched && entry.declaredSha256 !== null) {

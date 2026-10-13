@@ -1,8 +1,13 @@
-import { lstat, realpath } from "node:fs/promises";
+import { realpath } from "node:fs/promises";
 
 import { compareUnicodeCodePoints } from "../../domain/unicodeCodePointOrder.js";
 import { digestCanonicalValue } from "../../domain/canonicalDigest.js";
 import { AsarArtifactReader } from "../AsarArtifactReader.js";
+import { InesArtifactReader } from "../InesArtifactReader.js";
+import {
+  openRootArtifact,
+  hashStableRootArtifactHandle,
+} from "../inventory/hashStableRootArtifact.js";
 import {
   ArtifactPathRegistry,
   normalizeArtifactPath,
@@ -32,10 +37,7 @@ import type {
   ArtifactResourceOwner,
   ArtifactResourceScope,
 } from "../ArtifactResourceScope.js";
-import {
-  isMachOFormat,
-  type BinaryTarget,
-} from "../../domain/binaryTargetTypes.js";
+import { isMachOFormat } from "../../domain/binaryTargetTypes.js";
 import type { ArtifactInventorySnapshot } from "../../domain/artifactInventorySnapshot.js";
 import { scanArtifactInventoryInScope } from "../inventory/ArtifactInventory.js";
 import type { ArtifactIntegrityPolicyName } from "../../domain/artifactIntegrityPolicy.js";
@@ -43,7 +45,6 @@ import type { ArtifactIntegrityPolicyName } from "../../domain/artifactIntegrity
 /** Local extraction input with the output root chosen by the adapter. */
 export interface ArtifactExtractionInput {
   readonly inputPath: string;
-  readonly inputFormat: BinaryTarget["format"];
   readonly outputRoot: string;
   readonly environment: Readonly<NodeJS.ProcessEnv>;
   readonly integrityPolicy: ArtifactIntegrityPolicyName;
@@ -64,12 +65,13 @@ const extractArtifactInScope = async (
   // Cancellation wins over every later refusal, including unsupported formats.
   abortIfNeeded(signal);
   const sourcePath = await realpath(input.inputPath);
-  await requireExtractableFormat(sourcePath, input);
   const snapshot = await scanArtifactInventoryInScope(sourcePath, {
     resourceScope: input.resourceScope,
     signal,
     environment: input.environment,
     integrity: { mode: input.integrityPolicy },
+    admitRootFormat: (format) =>
+      requireExtractableFormat(format, input.inputPath),
   });
   return materializeArtifactInventoryInScope(
     input,
@@ -217,7 +219,12 @@ const materializeSelection = async ({
   const byPath = new Map(
     selected.map((item) => [item.occurrence.logical_path, item]),
   );
-  const reader = await createReader(sourcePath, input);
+  const reader = await createReader(
+    sourcePath,
+    input,
+    inventory.manifest,
+    signal,
+  );
   const readerOwner: ArtifactResourceOwner = {
     kind: "reader" as const,
     reader,
@@ -402,43 +409,89 @@ interface ExtractionInventory {
 }
 
 /**
- * Refuse a format without an extraction reader before inventory work starts.
- * The target kind, not the host, is unsupported by extraction. The error keeps
- * the caller's spelling of the path; I/O uses the canonical path.
+ * Admit the scanner's format, preserving the caller's path in a refusal.
  */
-const requireExtractableFormat = async (
-  path: string,
-  input: Pick<ArtifactExtractionInput, "inputPath" | "inputFormat">,
-): Promise<boolean> => {
-  const format = input.inputFormat;
-  const directory = (await lstat(path)).isDirectory();
+const requireExtractableFormat = (
+  format: ArtifactGraphManifest["root_format"],
+  inputPath: string,
+): void => {
   if (
-    !directory &&
+    format !== "directory" &&
     format !== "asar" &&
+    format !== "ines" &&
     !isMachOFormat(format) &&
     !isZipPackageFormat(format)
   )
     throw new AnalysisUnsupportedTargetError(
       "extract_artifact",
-      input.inputPath,
+      inputPath,
       `Artifact format has no extraction reader: ${format}`,
     );
-  return directory;
 };
 
 const createReader = async (
   path: string,
   input: Pick<
     ArtifactExtractionInput,
-    "inputPath" | "inputFormat" | "environment"
+    "inputPath" | "environment" | "resourceScope"
   >,
+  manifest: ArtifactGraphManifest,
+  signal?: AbortSignal,
 ): Promise<ArtifactReader> => {
-  const format = input.inputFormat;
-  if (await requireExtractableFormat(path, input))
-    return new DirectoryArtifactReader(path);
+  // The current scan owns format selection; the opened target may be stale.
+  const format = manifest.root_format;
+  if (format === "ines") {
+    const owner = await openRootArtifact(
+      path,
+      input.resourceScope,
+      signal,
+      "inventoried",
+    );
+    try {
+      const initial = await owner.handle.stat();
+      const digest = await hashStableRootArtifactHandle(
+        path,
+        owner.handle,
+        initial,
+        signal,
+      );
+      if (digest.sha256 !== manifest.root_sha256)
+        throw new ArtifactReaderFailure(
+          "integrity",
+          `Inventoried iNES source bytes changed: ${path}`,
+        );
+      return new InesArtifactReader(
+        path,
+        {
+          handle: owner.handle,
+          initial,
+        },
+        owner,
+      );
+    } catch (cause: unknown) {
+      const attempt = await input.resourceScope.release({
+        kind: "file-handle",
+        handle: owner,
+        resource: `iNES source ${path}`,
+      });
+      if (attempt.kind === "failed")
+        throw ArtifactReaderFailure.withCleanup(
+          cause,
+          ArtifactReaderFailure.cleanupObservation(attempt.cause, path),
+        );
+      throw cause;
+    }
+  }
+  if (format === "directory") return new DirectoryArtifactReader(path);
   if (format === "asar") return new AsarArtifactReader(path);
   if (isZipPackageFormat(format)) return new ZipArtifactReader(path, format);
-  return new MachOSliceArtifactReader(path, input.environment);
+  if (format === "mach-o" || format === "mach-o-universal")
+    return new MachOSliceArtifactReader(path, input.environment);
+  throw new AnalysisUnsupportedTargetError(
+    "extract_artifact",
+    input.inputPath,
+    `Artifact format has no extraction reader: ${format}`,
+  );
 };
 
 const preflight = (entry: ArtifactEntry): void => {

@@ -13,6 +13,7 @@ const EXECUTION_WORDING =
   /\b(?:run|runs|running|launch|launches|launching|execute|executes|executing|execution|start|starts|install|installs|uninstall|uninstalls)\b/iu;
 
 const EXECUTION_WORDING_EXCEPTIONS: Readonly<Record<string, string>> = {
+  inspect_artifact: "states that mapper execution remains unobserved",
   start_frida_session:
     "spawned targets remain suspended until resume_frida_session",
   inspect_native_load_image: "states that it does not execute the target",
