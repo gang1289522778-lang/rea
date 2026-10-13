@@ -796,3 +796,43 @@ describe("analysis error projection: evidence files", () => {
     },
   );
 });
+
+describe("analysis error projection: diagnosable output refusals", () => {
+  it("projects a producer's diagnosable output refusal instead of generic retry copy", () => {
+    const diagnostics = {
+      rejected_paths: [{ device_path: "/x/..", reason: "dot_segment" }],
+    };
+    const failure = new AnalysisOutputError(
+      "pull_adb_package",
+      "unsafe_device_path",
+      {
+        cause: new Error("private internal cause"),
+        capturedOutput: retainedOutput,
+        userMessage: "The device reported an unusable path.",
+        remediationAction: "Review details.diagnostics.",
+        diagnostics,
+      },
+    );
+    diagnostics.rejected_paths.length = 0;
+    const projected = projectAnalysisError(failure);
+    expect(projected).toEqual({
+      code: "unreadable_output",
+      category: "execution_failure",
+      message: "The device reported an unusable path.",
+      retryable: false,
+      remediation: { action: "Review details.diagnostics." },
+      details: {
+        operation: "pull_adb_package",
+        reason: "unsafe_device_path",
+        diagnostics: {
+          rejected_paths: [{ device_path: "/x/..", reason: "dot_segment" }],
+        },
+        captured_output: retainedOutput,
+      },
+    });
+    expect(analysisErrorProjectionSchema.safeParse(projected).success).toBe(
+      true,
+    );
+    expect(JSON.stringify(projected)).not.toContain("private internal cause");
+  });
+});

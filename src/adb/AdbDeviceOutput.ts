@@ -192,6 +192,23 @@ export const parsePackageListOutput = (
   return { packages, unparsedLines };
 };
 
+/**
+ * Quote a raw device path for caller-facing prose. JSON quoting escapes C0
+ * controls; every other control, format, surrogate, private-use, unassigned
+ * or noncharacter, non-space separator, or default-ignorable code point (such
+ * as U+202E, U+200B or U+3164) is escaped as `\u{...}` so a bidi override
+ * cannot reorder the rendered message and an invisible character cannot hide
+ * in it. Structured details keep the raw path.
+ */
+export const displayDevicePath = (devicePath: string): string =>
+  JSON.stringify(devicePath).replace(
+    /[\p{C}\p{Z}\p{Default_Ignorable_Code_Point}\u2800]/gu,
+    (character) =>
+      character === " "
+        ? character
+        : `\\u{${character.codePointAt(0)!.toString(16).toUpperCase()}}`,
+  );
+
 /** One APK of an installed package exactly as `pm path` reports it. */
 export interface AdbPackagePathEntry {
   readonly device_path: string;
@@ -220,14 +237,17 @@ export const parsePmPathOutput = (
     reason: AdbHostFileNameReason;
   }[] = [];
   const unparsedLines: string[] = [];
-  for (const rawLine of stdout.split(/\r?\n/u)) {
+  for (const rawLine of stdout.split("\n")) {
     if (rawLine === "") continue;
-    const match = /^package:(.*)$/u.exec(rawLine);
-    if (match === null) {
+    if (!rawLine.startsWith("package:")) {
       unparsedLines.push(rawLine);
       continue;
     }
-    const devicePath = match[1]!;
+    const devicePath = rawLine.slice("package:".length);
+    if (/[\s\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Default_Ignorable_Code_Point}\p{Noncharacter_Code_Point}]/u.test(devicePath)) {
+      rejectedPaths.push({ device_path: devicePath, reason: "unsupported_character" });
+      continue;
+    }
     const validated = adbHostFileName(devicePath);
     if (!validated.ok) {
       rejectedPaths.push({

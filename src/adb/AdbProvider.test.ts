@@ -223,7 +223,7 @@ const pullStub = (
   paths: string,
   pullBody: string,
 ): string => `if [ "$1" = "version" ]; then ${VERSION_BLOCK}; exit 0; fi
-if [ "$1" = "-s" ] && [ "$4" = "pm" ] && [ "$5" = "path" ]; then
+if [ "$1" = "-s" ] && [ "$4" = "-T" ] && [ "$5" = "pm" ] && [ "$6" = "path" ]; then
   printf '%s\\n' ${paths}
   exit 0
 fi
@@ -361,7 +361,7 @@ it.each([
 ])("refuses %s before creating output or pulling", async (_, pmOutput) => {
   const { binary, root } = await writeAdbStub(
     (root) => `if [ "$1" = "version" ]; then ${VERSION_BLOCK}; exit 0; fi
-if [ "$1" = "-s" ] && [ "$4" = "pm" ]; then printf '%b' '${pmOutput.replaceAll("'", "'\\''").replaceAll("\n", "\\n")}\\n'; exit 0; fi
+if [ "$1" = "-s" ] && [ "$4" = "-T" ] && [ "$5" = "pm" ]; then printf '%b' '${pmOutput.replaceAll("'", "'\\''").replaceAll("\n", "\\n")}\\n'; exit 0; fi
 if [ "$1" = "-s" ] && [ "$3" = "pull" ]; then : > '${join(root, "pull-ran")}'; exit 0; fi
 exit 1`,
   );
@@ -381,6 +381,171 @@ exit 1`,
   );
   await expect(readFile(join(root, "pull-ran"))).rejects.toThrow();
   await expect(lstat(output)).rejects.toMatchObject({ code: "ENOENT" });
+});
+
+it.each([
+  [
+    "an unusable final segment",
+    "package:/data/app/x/base.apk\npackage:/data/app/x/..\npackage:/data/app/y/",
+    {
+      reason: "unsafe_device_path",
+      diagnostics: {
+        package_name: "com.example",
+        rejected_paths: [
+          { device_path: "/data/app/x/..", reason: "dot_segment" },
+          { device_path: "/data/app/y/", reason: "empty_file_name" },
+        ],
+      },
+    },
+    '"/data/app/x/.." (dot_segment) and 1 other path(s)',
+  ],
+  [
+    "a duplicate local file name",
+    "package:/data/app/x/base.apk\npackage:/data/app/y/base.apk",
+    {
+      reason: "duplicate_local_destination",
+      diagnostics: {
+        package_name: "com.example",
+        file_name: "base.apk",
+        device_paths: ["/data/app/x/base.apk", "/data/app/y/base.apk"],
+      },
+    },
+    '"/data/app/x/base.apk" and "/data/app/y/base.apk"',
+  ],
+])(
+  "projects %s as a diagnosable pm path refusal",
+  async (_, pmOutput, details, excerpt) => {
+    const { binary, root } = await writeAdbStub(
+      () => `if [ "$1" = "version" ]; then ${VERSION_BLOCK}; exit 0; fi
+if [ "$1" = "-s" ] && [ "$4" = "-T" ] && [ "$5" = "pm" ]; then printf '%b' '${pmOutput}\\n'; exit 0; fi
+exit 1`,
+    );
+    const projected = await refusedBy(providerOver(binary), {
+      operation: "pull_adb_package",
+      input: {
+        serial: "emulator-5554",
+        package: "com.example",
+        output_directory: join(root, "pulls"),
+      },
+    });
+    expect(projected).toMatchObject({
+      code: "unreadable_output",
+      retryable: false,
+      details: {
+        operation: "pull_adb_package",
+        ...details,
+        captured_output: {
+          stdout: expect.stringContaining("package:/data/app/") as unknown,
+        },
+      },
+    });
+    expect(projected.message).toContain(excerpt);
+    expect(projected.message).not.toContain("rea doctor");
+    expect(projected.remediation.action).toContain("details.diagnostics");
+  },
+);
+
+it("refuses malformed UTF-8 pm paths and preserves their captured bytes", async () => {
+  const { binary, root } = await writeAdbStub(
+    (root) => `if [ "$1" = "version" ]; then ${VERSION_BLOCK}; exit 0; fi
+if [ "$1" = "-s" ] && [ "$4" = "-T" ] && [ "$5" = "pm" ]; then printf '%b' 'package:/data/\\377/base.apk\\n'; exit 0; fi
+if [ "$1" = "-s" ] && [ "$3" = "pull" ]; then : > '${join(root, "pull-ran")}'; exit 0; fi
+exit 1`,
+  );
+  const output = join(root, "pulls");
+  const result = await providerOver(binary).execute({
+    operation: "pull_adb_package",
+    input: {
+      serial: "emulator-5554",
+      package: "com.example",
+      output_directory: output,
+    },
+  });
+  expect(result.ok).toBe(false);
+  if (result.ok) return;
+  const bytes = Buffer.concat([
+    Buffer.from("package:/data/"),
+    Buffer.from([0xff]),
+    Buffer.from("/base.apk\n"),
+  ]);
+  expect(result.error.message).toContain("not valid UTF-8");
+  expect(result.error.capturedOutput?.stdout).toBe(
+    `base64:${bytes.toString("base64")}`,
+  );
+  await expect(readFile(join(root, "pull-ran"))).rejects.toThrow();
+  await expect(lstat(output)).rejects.toMatchObject({ code: "ENOENT" });
+});
+
+it("refuses an overlong filename before creating output or pulling", async () => {
+  const fileName = `${"a".repeat(300)}.apk`;
+  const { binary, root } = await writeAdbStub(
+    (root) => `if [ "$1" = "version" ]; then ${VERSION_BLOCK}; exit 0; fi
+if [ "$1" = "-s" ] && [ "$4" = "-T" ] && [ "$5" = "pm" ]; then printf 'package:/data/app/x/${fileName}\\n'; exit 0; fi
+if [ "$1" = "-s" ] && [ "$3" = "pull" ]; then : > '${join(root, "pull-ran")}'; exit 0; fi
+exit 1`,
+  );
+  const output = join(root, "pulls");
+  const projected = await refusedBy(providerOver(binary), {
+    operation: "pull_adb_package",
+    input: {
+      serial: "emulator-5554",
+      package: "com.example",
+      output_directory: output,
+    },
+  });
+  expect(projected).toMatchObject({
+    code: "unreadable_output",
+    retryable: false,
+    details: {
+      reason: "unsafe_device_path",
+      diagnostics: {
+        package_name: "com.example",
+        rejected_paths: [
+          {
+            device_path: `/data/app/x/${fileName}`,
+            reason: "file_name_too_long",
+          },
+        ],
+      },
+    },
+  });
+  expect(projected.message).toContain("file_name_too_long");
+  await expect(lstat(output)).rejects.toMatchObject({ code: "ENOENT" });
+  await expect(readFile(join(root, "pull-ran"))).rejects.toThrow();
+  await expect(lstat(join(output, "com.example"))).rejects.toMatchObject({
+    code: "ENOENT",
+  });
+});
+
+it("escapes invisible and bidi code points in refusal prose but keeps raw details", async () => {
+  const devicePath = "/data/app/x/\u202egpj.apk";
+  const { binary, root } = await writeAdbStub(
+    () => `if [ "$1" = "version" ]; then ${VERSION_BLOCK}; exit 0; fi
+if [ "$1" = "-s" ] && [ "$4" = "-T" ] && [ "$5" = "pm" ]; then printf 'package:%s\\npackage:%s\\n' '${devicePath}' '/data/app/y/\u202egpj.apk'; exit 0; fi
+exit 1`,
+  );
+  const projected = await refusedBy(providerOver(binary), {
+    operation: "pull_adb_package",
+    input: {
+      serial: "emulator-5554",
+      package: "com.example",
+      output_directory: join(root, "pulls"),
+    },
+  });
+  expect(projected.details).toMatchObject({
+    reason: "unsafe_device_path",
+    diagnostics: {
+      rejected_paths: [
+        { device_path: devicePath, reason: "unsupported_character" },
+        {
+          device_path: "/data/app/y/\u202egpj.apk",
+          reason: "unsupported_character",
+        },
+      ],
+    },
+  });
+  expect(projected.message).toContain('"/data/app/x/\\u{202E}gpj.apk"');
+  expect(projected.message).not.toContain("\u202e");
 });
 
 it.each([
@@ -410,7 +575,22 @@ it.each([
     if (aliases) {
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      expect(result.error.message).toContain("unique local destinations");
+      expect(projectAnalysisError(result.error)).toMatchObject({
+        code: "unreadable_output",
+        retryable: false,
+        remediation: {
+          action: expect.stringContaining("details.diagnostics") as unknown,
+        },
+        details: {
+          reason: "local_destination_unavailable",
+          diagnostics: {
+            package_name: "com.example",
+            device_path: `/data/app/y/${secondName}`,
+            file_name: secondName,
+            error_code: "EEXIST",
+          },
+        },
+      });
       await expect(readFile(pullLog)).rejects.toThrow();
       await expect(lstat(packageDirectory)).rejects.toThrow();
       return;
@@ -431,7 +611,7 @@ it.each([
 it("reports an uninstalled package from empty pm path output", async () => {
   const { binary } = await writeAdbStub(
     () => `if [ "$1" = "version" ]; then ${VERSION_BLOCK}; exit 0; fi
-if [ "$1" = "-s" ] && [ "$4" = "pm" ] && [ "$5" = "path" ]; then exit 0; fi`,
+if [ "$1" = "-s" ] && [ "$4" = "-T" ] && [ "$5" = "pm" ] && [ "$6" = "path" ]; then exit 0; fi`,
   );
   const projected = await refusedBy(providerOver(binary), {
     operation: "pull_adb_package",

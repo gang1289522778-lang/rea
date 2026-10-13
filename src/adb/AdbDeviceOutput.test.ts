@@ -258,20 +258,26 @@ describe("parsePmPathOutput", () => {
     });
   });
 
-  it("preserves whitespace and the exact POSIX device path", () => {
-    const devicePath = "/data/app/My App/résumé:final\\draft*.apk";
-    const { paths, rejectedPaths, unparsedLines } = parsePmPathOutput(
-      `package:${devicePath}\r\n`,
-    );
-    expect(paths).toEqual([
-      {
-        device_path: devicePath,
-        file_name: "résumé:final\\draft*.apk",
-        role: "unknown",
-      },
+  it("retains an LF-framed Package Manager source path exactly", () => {
+    const devicePath = "/data/app/例/résumé.apk";
+    expect(parsePmPathOutput(`package:${devicePath}\n`).paths).toEqual([
+      { device_path: devicePath, file_name: "résumé.apk", role: "unknown" },
     ]);
-    expect(rejectedPaths).toEqual([]);
-    expect(unparsedLines).toEqual([]);
+  });
+
+  it("refuses a payload CR without treating it as transport framing", () => {
+    const devicePath = "/data/app/base.apk\r";
+    expect(parsePmPathOutput(`package:${devicePath}\n`).rejectedPaths).toEqual([
+      { device_path: devicePath, reason: "unsupported_character" },
+    ]);
+  });
+
+  it("refuses Package Manager whitespace without changing the source path", () => {
+    const devicePath = "/data/app/My App/base.apk";
+    const parsed = parsePmPathOutput(`package:${devicePath}\n`);
+    expect(parsed.paths).toEqual([]);
+    expect(parsed.rejectedPaths).toEqual([{ device_path: devicePath, reason: "unsupported_character" }]);
+    expect(parsed.unparsedLines).toEqual([]);
   });
 
   it("rejects an empty final component without normalizing the source", () => {

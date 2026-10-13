@@ -1,8 +1,12 @@
+import { lstat, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { expect, it, onTestFinished } from "vitest";
 
 import type { AdbDeviceAnalysisPort } from "../../../src/application/adb/AdbDeviceAnalysisPort.js";
 import { createAnalysisExecution } from "../../../src/application/AnalysisProvider.js";
+import { createAdbDeviceAnalysisProvider } from "../../../src/composition/adb.js";
 import { parseEvidence } from "../../../src/domain/evidence.js";
 import { ok } from "../../../src/domain/result.js";
 import { createServer } from "../../../src/server/createServer.js";
@@ -379,3 +383,90 @@ it("rejects invalid tool input before reaching the provider", async () => {
     .join("");
   expect(text).toContain("Invalid arguments for tool inspect_adb_device");
 });
+
+it.skipIf(process.platform === "win32")(
+  "projects refused pm path entries with structured diagnostics to MCP callers",
+  async () => {
+    const root = await mkdtemp(join(tmpdir(), "rea-adb-mcp-pm-path-"));
+    onTestFinished(() => rm(root, { recursive: true, force: true }));
+    const adb = join(root, "adb");
+    const pullLog = join(root, "pull.log");
+    await writeFile(
+      adb,
+      `#!/bin/sh
+if [ "$1" = "version" ]; then
+  printf 'Android Debug Bridge version 1.0.41\\nVersion 34.0.5-stub\\nInstalled as %s\\n' "$0"
+  exit 0
+fi
+if [ "$1" = "-s" ] && [ "$3" = "shell" ] && [ "$4" = "-T" ] && [ "$5" = "pm" ] && [ "$6" = "path" ]; then
+  printf '%s\\n' 'package:/data/app/x/base.apk' 'package:/data/app/x/..'
+  exit 0
+fi
+if [ "$1" = "-s" ] && [ "$3" = "pull" ]; then : > '${pullLog}'; fi
+exit 1
+`,
+      { mode: 0o755 },
+    );
+    const server = createServer(
+      {
+        kind: "session",
+        session: createTestBinarySession(() => {
+          throw new Error("must not start");
+        }),
+      },
+      {
+        adbDeviceAnalysis: createAdbDeviceAnalysisProvider({
+          REA_ADB_PATH: adb,
+        }),
+      },
+    );
+    onTestFinished(() => server.close());
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    const client = new Client({
+      name: "adb-boundary-pm-path",
+      version: "0.0.0",
+    });
+    onTestFinished(() => client.close());
+    await client.connect(clientTransport);
+    const output = join(root, "pulls");
+
+    const refused = await client.callTool({
+      name: "pull_adb_package",
+      arguments: {
+        serial: "emulator-5554",
+        package: "com.hostile",
+        output_directory: output,
+      },
+    });
+
+    expect(refused.isError).toBe(true);
+    const text = (refused.content as { readonly text?: string }[])
+      .map((part) => part.text ?? "")
+      .join("");
+    const projected = (
+      JSON.parse(text) as { readonly error: Record<string, unknown> }
+    ).error;
+    expect(projected).toMatchObject({
+      code: "unreadable_output",
+      retryable: false,
+      details: {
+        operation: "pull_adb_package",
+        reason: "unsafe_device_path",
+        diagnostics: {
+          package_name: "com.hostile",
+          rejected_paths: [
+            { device_path: "/data/app/x/..", reason: "dot_segment" },
+          ],
+        },
+        captured_output: {
+          stdout: expect.stringContaining("package:/data/app/x/..") as unknown,
+        },
+      },
+    });
+    expect(projected.message).toContain('"/data/app/x/.." (dot_segment)');
+    await expect(lstat(pullLog)).rejects.toThrow(/ENOENT/u);
+    await expect(lstat(output)).rejects.toThrow(/ENOENT/u);
+  },
+);

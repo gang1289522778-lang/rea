@@ -1,5 +1,6 @@
 /** Why a device-reported path cannot be used as a host file name. */
 export type AdbHostFileNameReason =
+  | "file_name_too_long"
   | "empty_file_name"
   | "not_absolute_path"
   | "dot_segment"
@@ -30,6 +31,8 @@ export const adbHostFileName = (
   if (!devicePath.startsWith("/"))
     return { ok: false, reason: "not_absolute_path" };
   const fileName = devicePath.slice(devicePath.lastIndexOf("/") + 1);
+  if ((platform === "win32" ? fileName.length : Buffer.byteLength(fileName, "utf8")) > 255)
+    return { ok: false, reason: "file_name_too_long" };
   if (fileName === "." || fileName === "..")
     return { ok: false, reason: "dot_segment" };
   if (platform === "win32") {
