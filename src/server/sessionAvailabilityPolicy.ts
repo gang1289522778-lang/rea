@@ -11,6 +11,7 @@ export interface SessionAvailabilityDefaults {
     | "packetCaptureEnabled"
     | "signalRecordingEnabled"
     | "wasmArtifactEnabled"
+    | "javaDecompilerEnabled"
     | "evmInterfaceEnabled"
     | "browserObservationEnabled"
     | "browserScenarioEnabled"
@@ -40,6 +41,8 @@ export const sessionAvailabilityPolicy = (
         defaults.optionalFeatures?.signalRecordingEnabled ?? false,
       wasmArtifactEnabled:
         defaults.optionalFeatures?.wasmArtifactEnabled ?? false,
+      javaDecompilerEnabled:
+        defaults.optionalFeatures?.javaDecompilerEnabled ?? false,
       evmInterfaceEnabled:
         defaults.optionalFeatures?.evmInterfaceEnabled ?? false,
       processCaptureEnabled: platform !== "win32",

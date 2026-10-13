@@ -7,6 +7,11 @@ import type {
 } from "../domain/analysisErrorBase.js";
 
 export interface ArtifactReaderFailureOptions extends ErrorOptions {
+  readonly resourceLimit?: {
+    readonly boundary: string;
+    readonly maximum: number;
+    readonly actual: number;
+  };
   readonly cleanup?: AnalysisCleanupObservation;
   readonly partialObservation?: AnalysisPartialObservation;
 }
@@ -101,6 +106,7 @@ export interface ArtifactReader {
 
 /** Typed adapter failure translated at provider boundary. */
 export class ArtifactReaderFailure extends Error {
+  readonly resourceLimit: ArtifactReaderFailureOptions["resourceLimit"];
   readonly cleanup: AnalysisCleanupObservation | undefined;
   readonly partialObservation: AnalysisPartialObservation | undefined;
 
@@ -124,6 +130,7 @@ export class ArtifactReaderFailure extends Error {
   ) {
     super(message, options);
     this.name = "ArtifactReaderFailure";
+    this.resourceLimit = options?.resourceLimit;
     this.cleanup = options?.cleanup;
     this.partialObservation = options?.partialObservation;
   }
@@ -144,6 +151,9 @@ export class ArtifactReaderFailure extends Error {
       primary.message,
       {
         cause: primary,
+        ...(primary.resourceLimit === undefined
+          ? {}
+          : { resourceLimit: primary.resourceLimit }),
         cleanup: combineCleanup(primary.cleanup, cleanup),
         ...(mergedObservation === undefined
           ? {}

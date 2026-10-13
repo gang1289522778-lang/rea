@@ -56,6 +56,8 @@ const SOURCE_PATHS = {
   evmContracts: "dist/contracts/evm/evmToolContracts.js",
   sqliteContracts: "dist/contracts/sqlite/sqliteToolContracts.js",
   sqliteDomain: "dist/domain/sqlite/sqliteDatabase.js",
+  javaContracts: "dist/contracts/java/javaToolContracts.js",
+  javaDomain: "dist/domain/java/javaArchive.js",
   evmProvider: "dist/evm/EvmoleRelease.js",
   goContracts: "dist/contracts/go/goToolContracts.js",
   goProvider: "dist/go/GoBinaryProvider.js",

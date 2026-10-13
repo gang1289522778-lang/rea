@@ -70,6 +70,14 @@ table. This command does not require a native analysis provider. See
 [SQLite database snapshots](sqlite-databases.md) for database/WAL identity,
 source-file handling and row-value semantics.
 
+## Java archives
+
+For a local JAR or `.class` file, `rea inspect-java-archive PATH --json` lists
+the manifest, mod/framework descriptors, packages and a page of class rows;
+`rea inspect-java-class PATH CLASS --json` parses one class. Neither needs Java.
+`rea decompile-java-class PATH CLASS --json` additionally requires an absolute
+`REA_VINEFLOWER_JAR` and Java 17+. See [Java archives](java-archives.md).
+
 ## Native analysis
 
 Inspect embedded Go build metadata without installing Go or configuring a

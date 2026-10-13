@@ -46,6 +46,7 @@ export type AvailabilityPolicy = {
   readonly packetCaptureEnabled?: boolean;
   readonly signalRecordingEnabled?: boolean;
   readonly wasmArtifactEnabled?: boolean;
+  readonly javaDecompilerEnabled?: boolean;
   readonly evmInterfaceEnabled?: boolean;
   readonly processCaptureEnabled: boolean;
   readonly optionalProviderLoadFailures?: OptionalProviderLoadFailures;
@@ -343,8 +344,20 @@ const workflowAvailabilityFor = ({
   kind,
   policy,
 }: AvailabilityContext): Availability | null => {
-  if (name === "inspect_go_binary")
+  if (
+    name === "inspect_go_binary" ||
+    name === "inspect_java_archive" ||
+    name === "inspect_java_class"
+  )
     return { reason: "available", remediation: null };
+  if (name === "decompile_java_class")
+    return policy.javaDecompilerEnabled === true
+      ? { reason: "available", remediation: null }
+      : {
+          reason: "provider_missing",
+          remediation:
+            "Set absolute REA_VINEFLOWER_JAR to a caller-supplied Vineflower JAR and provide Java 17+ via JAVA_HOME or PATH. No active binary target is required; inspect_java_archive and inspect_java_class need neither.",
+        };
   if (name === "inspect_sqlite_database") {
     const capability = sqliteDatabaseCapability(process.versions.node);
     return capability.available

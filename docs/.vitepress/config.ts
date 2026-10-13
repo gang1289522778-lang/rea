@@ -50,6 +50,7 @@ export default defineConfig({
           { text: "SQLite databases", link: "/sqlite-databases" },
           { text: "Packet captures", link: "/packet-captures" },
           { text: "Signal recordings", link: "/signal-recordings" },
+          { text: "Java archives", link: "/java-archives" },
         ],
       },
       {

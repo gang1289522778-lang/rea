@@ -17,6 +17,9 @@ import { registerEvmTools } from "./registerEvmTools.js";
 import type { SqliteDatabaseService } from "../application/sqlite/SqliteDatabaseService.js";
 import { createSqliteDatabaseService } from "../composition/sqlite.js";
 import { registerSqliteTools } from "./registerSqliteTools.js";
+import type { JavaArchiveService } from "../application/java/JavaArchiveService.js";
+import { createJavaArchiveService } from "../composition/java.js";
+import { registerJavaTools } from "./registerJavaTools.js";
 import { registerRecordedCrashTools } from "./registerRecordedCrashTools.js";
 import { createRecordedCrashService } from "../composition/binaryDiagnostics.js";
 import { createGoBinaryService } from "../composition/go.js";
@@ -138,6 +141,7 @@ export interface CreateServerOptions {
   readonly wasmArtifact?: WasmArtifactService;
   readonly evmInterface?: EvmInterfaceService;
   readonly sqliteDatabase?: SqliteDatabaseService;
+  readonly javaArchive?: JavaArchiveService;
   readonly logger?: Logger;
   readonly binaryLayout?: BinaryLayoutService;
   readonly goBinary?: GoBinaryService;
@@ -187,6 +191,9 @@ const installSessionToolAvailability = (
       wasmArtifactEnabled:
         options.wasmArtifact !== undefined ||
         isAbsolute(environment.REA_WABT_BIN_DIRECTORY ?? ""),
+      javaDecompilerEnabled:
+        options.javaArchive !== undefined ||
+        isAbsolute(environment.REA_VINEFLOWER_JAR ?? ""),
       evmInterfaceEnabled: options.evmInterface !== undefined || linuxX64,
       webModuleResolutionEnabled:
         options.webModuleTrace !== undefined ||
@@ -273,6 +280,8 @@ export const createServer = (
     options.evmInterface ?? evmInterfaceModule.create(environment);
   const sqliteDatabase =
     options.sqliteDatabase ?? createSqliteDatabaseService(environment);
+  const javaArchive =
+    options.javaArchive ?? createJavaArchiveService(environment);
   const binaryLayout =
     options.binaryLayout ?? createBinaryLayoutService(environment);
   const recordedCrash =
@@ -297,6 +306,7 @@ export const createServer = (
     delivery,
     evmInterface,
     sqliteDatabase,
+    javaArchive,
     binaryLayout,
     recordedCrash,
     webSourceLocation,
@@ -346,6 +356,7 @@ export const createServer = (
       pcap.close(),
       evmInterface.close(),
       sqliteDatabase.close(),
+      javaArchive.close(),
       binaryLayout.close(),
       recordedCrash.close(),
       webSourceLocation.close(),
@@ -601,6 +612,13 @@ const registerConfiguredAnalysisTools = (
   registerSqliteTools(
     server,
     options.sqliteDatabase ?? createSqliteDatabaseService(environment),
+    toolLogger,
+    recordEvidence,
+    withAdmittedAnalysis,
+  );
+  registerJavaTools(
+    server,
+    options.javaArchive ?? createJavaArchiveService(environment),
     toolLogger,
     recordEvidence,
     withAdmittedAnalysis,

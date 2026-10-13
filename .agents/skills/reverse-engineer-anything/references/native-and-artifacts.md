@@ -26,6 +26,23 @@ schema facts, not row-read targets. REA inspects private copies and leaves
 the source files untouched; obtain a coherent quiescent database/WAL snapshot
 before inspection. See [SQLite snapshots](https://github.com/morluto/rea/blob/main/docs/sqlite-databases.md).
 
+## Java archives and class files
+
+Start a JAR with `inspect_java_archive`: it returns the manifest main section,
+framework descriptors (Forge, Fabric, Quilt, Bukkit, Velocity, Spring Boot,
+service providers), native libraries, bytecode versions and per-package
+`short_name_classes`, which separate renamed application code from intact
+bundled libraries. Page class rows with `query`, `offset` and `next_offset`.
+`name_obfuscation` is a labeled heuristic, not proof of an obfuscator or of
+string/flow protection. `inspect_java_class` then gives one class's members,
+descriptors, annotation values, constant-pool string literals and referenced
+classes; literals usually survive renaming and point at behavior. Both are
+built in and never load or run bytecode. `decompile_java_class` needs a
+caller-supplied Vineflower JAR (`REA_VINEFLOWER_JAR`) and Java 17+; it stages
+the class, its nested classes and the archive as library context privately.
+Treat its source as derived: renamed identifiers stay as found and local names
+are synthesized. See [Java archives](https://github.com/morluto/rea/blob/main/docs/java-archives.md).
+
 ## Recorded Linux crashes
 
 Use `inspect_recorded_crash` with an explicit Linux x86-64 ELF core path to

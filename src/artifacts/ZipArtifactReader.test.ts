@@ -65,6 +65,11 @@ describe("ZipArtifactReader decompression budget", () => {
       await expect(enumerate(reader)).rejects.toMatchObject({
         name: "ArtifactReaderFailure",
         reason: "limit",
+        resourceLimit: {
+          boundary: "decompressed_bytes",
+          maximum: MINIMUM_ARTIFACT_DECOMPRESSION_BYTES,
+          actual: 2_147_483_647,
+        },
       });
     } finally {
       await reader.close();

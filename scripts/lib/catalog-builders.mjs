@@ -32,6 +32,7 @@ export const toolFamilyCatalog = (sources) => {
         ...sources.sqliteContracts.SQLITE_TOOL_CONTRACTS,
         ...sources.captureContracts.CAPTURE_TOOL_CONTRACTS,
         ...sources.signalContracts.SIGNAL_TOOL_CONTRACTS,
+        ...sources.javaContracts.JAVA_TOOL_CONTRACTS,
       ],
     },
     {
@@ -226,6 +227,18 @@ export const providerCatalog = (sources) => {
     {
       identity: sources.sqliteDomain.SQLITE_PROVIDER_IDENTITY,
       contracts: sources.sqliteContracts.SQLITE_TOOL_CONTRACTS,
+    },
+    {
+      identity: sources.javaDomain.JAVA_CLASSFILE_PROVIDER_IDENTITY,
+      contracts: sources.javaContracts.JAVA_TOOL_CONTRACTS.filter(
+        ({ name }) => name !== "decompile_java_class",
+      ),
+    },
+    {
+      identity: sources.javaDomain.VINEFLOWER_PROVIDER_IDENTITY,
+      contracts: sources.javaContracts.JAVA_TOOL_CONTRACTS.filter(
+        ({ name }) => name === "decompile_java_class",
+      ),
     },
     {
       identity: sources.artifactProviders.ARTIFACT_GRAPH_PROVIDER,
