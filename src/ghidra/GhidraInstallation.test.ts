@@ -338,6 +338,28 @@ describe("Ghidra installation rejection diagnostics", () => {
       failed: "java",
       code: "unsupported_version",
     },
+    {
+      name: "32-bit Java",
+      options: {
+        installDir: INSTALL,
+        platform: "linux" as const,
+        architecture: "x64" as const,
+      },
+      override: { probeJava: () => ({ ...JAVA, bits: 32 }) },
+      failed: "java",
+      code: "unsupported_version",
+    },
+    {
+      name: "unreported Java bitness",
+      options: {
+        installDir: INSTALL,
+        platform: "linux" as const,
+        architecture: "x64" as const,
+      },
+      override: { probeJava: () => ({ ...JAVA, bits: null }) },
+      failed: "java",
+      code: "version_unresolved",
+    },
   ])("distinguishes $name", ({ options, override, failed, code }) => {
     const result = inspectGhidraInstallation(
       { ...options, environment: {} },

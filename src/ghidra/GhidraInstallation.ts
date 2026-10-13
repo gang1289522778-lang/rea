@@ -241,7 +241,10 @@ export interface GhidraJavaObservation {
   readonly version: string;
   readonly major: number;
   readonly home: string;
-  readonly bits: number;
+  /** Data-model bitness; null when the probe did not report a decimal value. */
+  readonly bits: number | null;
+  /** Reported data-model text that is not a decimal bitness, kept as observed. */
+  readonly unparsedBits?: string;
   readonly runtime: "jdk" | "jre";
   readonly vmName?: string;
 }
@@ -676,17 +679,17 @@ const javaCheck = (
 ): GhidraInstallationCheck => {
   const requirement = ghidraJavaRequirement(properties);
   const range = ghidraJavaRangeLabel(requirement);
-  const supported =
+  const otherwiseSupported =
     observation !== undefined &&
     ghidraJavaMajorAccepted(observation.major, requirement) &&
-    observation.bits === 64 &&
     observation.runtime === "jdk";
+  const supported = otherwiseSupported && observation.bits === 64;
   const detail =
     observation === undefined
       ? requirement.unresolved === null
         ? command
         : `${command}; ${requirement.unresolved}`
-      : `${observation.version}; ${String(observation.bits)}-bit; ${observation.runtime === "jdk" ? "JDK" : "runtime only"}; ${observation.home}; accepted ${range}`;
+      : `${observation.version}; ${javaBitnessDetail(observation)}; ${observation.runtime === "jdk" ? "JDK" : "runtime only"}; ${observation.home}; accepted ${range}`;
   return installationCheck({
     name: "java",
     passed: supported,
@@ -695,10 +698,19 @@ const javaCheck = (
         ? "version_unresolved"
         : observation === undefined
           ? "runtime_missing"
-          : "unsupported_version",
+          : otherwiseSupported && observation.bits === null
+            ? "version_unresolved"
+            : "unsupported_version",
     detail,
     remediation: javaRemediation(requirement, configuredHome, range),
   });
+};
+
+const javaBitnessDetail = (observation: GhidraJavaObservation): string => {
+  if (observation.bits !== null) return `${String(observation.bits)}-bit`;
+  return observation.unparsedBits === undefined
+    ? "bitness unknown"
+    : `bitness unknown (sun.arch.data.model = ${JSON.stringify(observation.unparsedBits)})`;
 };
 
 const javaRemediation = (
@@ -781,17 +793,18 @@ const systemGhidraInstallationHost = (): GhidraInstallationHost => ({
     const version = javaProperty(output, "java.version");
     const home = javaProperty(output, "java.home");
     const vmName = javaProperty(output, "java.vm.name");
-    const bits = Number.parseInt(
-      javaProperty(output, "sun.arch.data.model") ?? "0",
-      10,
-    );
-    if (version === null || home === null) return undefined;
+    const dataModel = javaProperty(output, "sun.arch.data.model");
+    const bits = javaDataModelBits(dataModel);
+    const unparsedBits = bits === null ? dataModel : null;
+    // An empty version or home cannot identify the runtime.
+    if (!version || !home) return undefined;
     return {
       version,
       major: javaMajor(version),
       home,
       ...(vmName === null ? {} : { vmName }),
       bits,
+      ...(unparsedBits === null ? {} : { unparsedBits }),
       runtime: executablePath(
         (process.platform === "win32" ? win32 : posix).join(
           home,
@@ -816,9 +829,19 @@ const executablePath = (path: string): boolean => {
   }
 };
 
+// Only an exactly representable decimal is a bitness; other text stays unparsed.
+const javaDataModelBits = (dataModel: string | null): number | null => {
+  if (dataModel === null || !/^[0-9]+$/u.test(dataModel)) return null;
+  const bits = Number(dataModel);
+  return Number.isSafeInteger(bits) ? bits : null;
+};
+
+// -XshowSettings prints `<indent>key = value`: consume the delimiter and its
+// single space, then keep the value verbatim so malformed or padded values
+// are not normalized. Absent properties are null; empty values are "".
 const javaProperty = (output: string, name: string): string | null =>
   new RegExp(
-    `^\\s*${name.replaceAll(".", "\\.")}\\s*=\\s*(.+?)\\s*$`,
+    `^[ \\t]*${name.replaceAll(".", "\\.")}[ \\t]*= ?([^\\r\\n]*)$`,
     "mu",
   ).exec(output)?.[1] ?? null;
 
