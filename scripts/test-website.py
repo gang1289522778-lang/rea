@@ -15,7 +15,7 @@ from urllib.request import urlopen
 import xml.etree.ElementTree as ET
 
 import polib
-from website_i18n import Document, build_translations, checked_catalog, extract_catalogs, languages, reading_pages, read_runtime
+from website_i18n import Document, build_translations, checked_catalog, extract_catalogs, is_language_code, languages, reading_pages, read_runtime
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -251,6 +251,19 @@ class WebsiteMaintenanceChecks(unittest.TestCase):
 
 class WebsiteTranslationChecks(unittest.TestCase):
     """Exercise source edits, translated evidence and language editions at their consumers."""
+
+    def test_script_subtags_preserve_the_hinglish_edition(self):
+        for code in ("en", "zh-CN", "hi-Latn", "hi-Latn-IN"):
+            with self.subTest(code=code):
+                self.assertTrue(is_language_code(code))
+        for code in ("hi-latn", "hi-LATN", "hi-IN-Latn", "hi/Latn"):
+            with self.subTest(code=code):
+                self.assertFalse(is_language_code(code))
+        hinglish = next(item for item in languages(ROOT) if item["readme"] == "README_hi-Latn.md")
+        self.assertEqual(hinglish["code"], "hi-Latn")
+        catalog = polib.pofile(ROOT / "website/locales/hi-Latn/messages.po")
+        self.assertEqual(catalog.metadata["Language"], "hi-Latn")
+        self.assertFalse((ROOT / "website/locales/hi/messages.po").exists())
 
     @contextlib.contextmanager
     def translated_project(self):

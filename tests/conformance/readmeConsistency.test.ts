@@ -22,6 +22,7 @@ const translatedReadmes = [
   "README_ar.md",
   "README_fa.md",
   "README_id.md",
+  "README_hi-Latn.md",
 ] as const;
 
 const jsonExamples = (content: string): unknown[] =>
