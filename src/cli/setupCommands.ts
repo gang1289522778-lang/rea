@@ -11,9 +11,9 @@ import { homeDirectoryFromEnvironment } from "../config/homeDirectory.js";
 import { isUpdateFailure } from "../application/UpdateFailure.js";
 import {
   confirmInteractiveSetup,
-  renderSetupDryRun,
   renderInteractiveSetupResult,
   renderSetupProgress,
+  renderTerminalSetupSummary,
 } from "./interactiveSetup.js";
 import { PRODUCT_IDENTITY } from "../identity.js";
 import { logCliCommand } from "../cliLogging.js";
@@ -226,10 +226,23 @@ const runSetupCommand = async (
       : undefined,
   );
   if (interactive) renderInteractiveSetupResult(result, environment);
-  else if (options.dryRun && !input.formatExplicit && hasInteractiveTerminal())
-    renderSetupDryRun(result.plannedActions);
+  else if (setupOutputHiddenInTerminal(input.formatExplicit))
+    renderTerminalSetupSummary(
+      result,
+      hasExplicitScope,
+      options.dryRun ? "dry-run" : "apply",
+      environment,
+    );
   return result;
 };
+
+/**
+ * Mirror incur's `agent-only` rule: a terminal stdout without an explicit
+ * `--format` suppresses the returned value, so non-interactive runs need their
+ * own human summary.
+ */
+const setupOutputHiddenInTerminal = (formatExplicit: boolean): boolean =>
+  !formatExplicit && process.stdout.isTTY === true;
 
 const setupRunOptions = (
   input: {

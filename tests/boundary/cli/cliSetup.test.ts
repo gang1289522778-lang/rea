@@ -1,12 +1,14 @@
 import { execFile } from "node:child_process";
-import { access, rm } from "node:fs/promises";
+import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
 
 import { spawn } from "@lydell/node-pty";
+import { decode as decodeToon } from "@toon-format/toon";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { CLIENT_LOCATION_ENVIRONMENT } from "../../fixtures/clientEnvironment.js";
 import { createTestTempDirectory } from "../../fixtures/temporaryDirectory.js";
 
 const execute = promisify(execFile);
@@ -120,7 +122,7 @@ describe("TTY setup dry run", () => {
     expect(exitCode, output).toBe(0);
     expect(output).toContain("CREATE  Codex");
     expect(output).toContain(join(home, ".codex/config.toml"));
-    expect(output).toContain("Dry run complete. No changes were made.");
+    expect(output).toContain("Dry run: no changes were made.");
     await expect(
       access(join(home, ".codex/config.toml")),
     ).rejects.toMatchObject({
@@ -333,6 +335,293 @@ describe("interactive setup completion", () => {
     },
   );
 });
+
+describe("non-interactive setup output", () => {
+  it("renders a blocked dry-run plan before remediation and the no-mutation notice", async () => {
+    const result = {
+      status: "needs_human",
+      plannedActions: [actions[2]],
+      appliedActions: [],
+      clients: {},
+      doctor: {},
+      clientStates: [],
+      remediation: "Unsupported Hopper host",
+    };
+    const { stderr } = await execute(
+      process.execPath,
+      [
+        "--input-type=module",
+        "--eval",
+        [
+          'import { renderTerminalSetupSummary } from "./dist/cli/interactiveSetup.js";',
+          `renderTerminalSetupSummary(${JSON.stringify(result)}, true, "dry-run");`,
+        ].join("\n"),
+      ],
+      { cwd: process.cwd(), env: { ...process.env, NO_COLOR: "1" } },
+    );
+    expect(stderr).toContain("Planned changes (dry run)");
+    expect(stderr).toContain("Hopper deep-analysis provider");
+    expect(stderr).toContain("Unsupported Hopper host");
+    expect(stderr.indexOf("Planned changes")).toBeLessThan(
+      stderr.indexOf("Unsupported Hopper host"),
+    );
+    expect(stderr).toContain("Dry run: no changes were made.");
+  });
+
+  it.each([["--format", "json"], ["--json"]])(
+    "keeps explicitly structured terminal output free of human summaries: %s",
+    async (...format) => {
+      await withTerminalSetup(
+        ["--dry-run", "--client", "codex", "--skill=false", ...format],
+        ({ output, stderr, exitCode }) => {
+          expect(exitCode).toBe(0);
+          expect(stderr).toBe("");
+          expect(JSON.parse(output)).toMatchObject({
+            status: "planned",
+            appliedActions: [],
+          });
+        },
+        { captureStderr: true },
+      );
+    },
+    60_000,
+  );
+
+  it("returns a structured result when setup output is piped", async () => {
+    const home = await createTestTempDirectory("rea-setup-piped-");
+    const { stdout, stderr } = await execute(
+      process.execPath,
+      [
+        "scripts/rea.mjs",
+        "setup",
+        "--dry-run",
+        "--client",
+        "codex",
+        "--skill=false",
+      ],
+      {
+        cwd: process.cwd(),
+        env: {
+          ...isolatedClientEnvironment(),
+          HOME: home,
+          USERPROFILE: home,
+          XDG_CONFIG_HOME: join(home, ".config"),
+          NO_COLOR: "1",
+        },
+      },
+    );
+    expect(stderr).toBe("");
+    expect(decodeToon(stdout)).toMatchObject({
+      status: "planned",
+      appliedActions: [],
+    });
+    await expect(
+      access(join(home, ".codex", "config.toml")),
+    ).rejects.toMatchObject({ code: "ENOENT" });
+  }, 60_000);
+});
+
+describe("non-interactive setup in a terminal", () => {
+  it("shows the dry-run plan without applying it", async () => {
+    await withTerminalSetup(
+      ["--dry-run", "--client", "codex", "--skill=false"],
+      async ({ output, exitCode, home }) => {
+        const config = join(home, ".codex", "config.toml");
+        expect(exitCode).toBe(0);
+        expect(output).toContain("Planned changes (dry run)");
+        expect(output).toContain(config);
+        expect(output).toContain("Dry run: no changes were made.");
+        await expect(access(config)).rejects.toThrow();
+      },
+    );
+  }, 60_000);
+
+  it("explains how to choose agents when a dry run has no scope", async () => {
+    await withTerminalSetup(["--dry-run"], ({ output, exitCode }) => {
+      expect(exitCode).toBe(0);
+      expect(output).toContain("No changes planned for the selected scope.");
+      expect(output).toContain("--client <name>");
+      expect(output).toContain("Dry run: no changes were made.");
+    });
+  }, 60_000);
+
+  it("shows manual setup instructions for a dry run without file changes", async () => {
+    await withTerminalSetup(
+      ["--dry-run", "--client", "grok_bot", "--skill=false"],
+      ({ output, exitCode }) => {
+        expect(exitCode).toBe(0);
+        expect(output).toContain("No changes planned for the selected scope.");
+        expect(output).toContain("Grok Bot keeps connectors");
+        expect(output).not.toContain("--client <name>");
+      },
+    );
+  }, 60_000);
+
+  it("summarizes an approved setup", async () => {
+    await withTerminalSetup(
+      ["--yes", "--client", "codex", "--skill=false"],
+      async ({ output, exitCode, home }) => {
+        expect(exitCode).toBe(0);
+        expect(output).toContain("Restart Codex to load REA.");
+        await expect(
+          access(join(home, ".codex", "config.toml")),
+        ).resolves.toBeUndefined();
+      },
+    );
+  }, 60_000);
+
+  it("shows the pending plan when stdin is not a terminal", async () => {
+    await withTerminalSetup(
+      ["--client", "codex", "--skill=false"],
+      async ({ output, exitCode, home }) => {
+        const config = join(home, ".codex", "config.toml");
+        expect(exitCode).toBe(1);
+        expect(output).toContain("Ready to review");
+        expect(output).toContain(config);
+        expect(output).toContain(
+          "Review the setup plan, then rerun interactively or with --yes.",
+        );
+        await expect(access(config)).rejects.toThrow();
+      },
+      { redirectStdin: true },
+    );
+  }, 60_000);
+
+  it("names changes already applied when a later step fails", async () => {
+    await withTerminalSetup(
+      ["--yes", "--client", "codex"],
+      async ({ output, exitCode, home }) => {
+        const config = join(home, ".codex", "config.toml");
+        expect(exitCode).toBe(1);
+        expect(output).toContain("Already applied");
+        expect(output).toContain("Codex");
+        expect(output).toContain(config);
+        expect(output.indexOf("REA skill")).toBeGreaterThan(
+          output.indexOf("Already applied"),
+        );
+        await expect(access(config)).resolves.toBeUndefined();
+      },
+      {
+        prepare: async (home) => {
+          await mkdir(join(home, ".agents"), { recursive: true });
+          await writeFile(join(home, ".agents", "skills"), "");
+        },
+      },
+    );
+  }, 60_000);
+});
+
+interface TerminalSetupRun {
+  readonly output: string;
+  readonly exitCode: number;
+  readonly home: string;
+  readonly stderr: string | undefined;
+}
+
+/** Drop the developer's client locations so setup resolves only the temporary home. */
+const isolatedClientEnvironment = (): NodeJS.ProcessEnv => {
+  const environment = { ...process.env };
+  for (const name of CLIENT_LOCATION_ENVIRONMENT) delete environment[name];
+  return environment;
+};
+
+interface TerminalSetupOptions {
+  readonly prepare?: (home: string) => Promise<void>;
+  /** Give setup a terminal stdout while leaving stdin redirected. */
+  readonly redirectStdin?: boolean;
+  readonly captureStderr?: boolean;
+}
+
+/**
+ * Launch setup with the parent's terminal stdout and a non-terminal stdin.
+ * A direct pseudo-terminal would make stdin a terminal and start the
+ * interactive journey instead.
+ */
+const redirectedStdinLauncher = (
+  args: readonly string[],
+  stderrPath?: string,
+): string =>
+  [
+    'import { spawn } from "node:child_process";',
+    'import { openSync, closeSync } from "node:fs";',
+    `const stderr = ${stderrPath === undefined ? '"inherit"' : `openSync(${JSON.stringify(stderrPath)}, "wx")`};`,
+    `const child = spawn(process.execPath, ${JSON.stringify(["scripts/rea.mjs", "setup", ...args])}, {`,
+    "  cwd: process.cwd(),",
+    "  env: process.env,",
+    '  stdio: ["ignore", "inherit", stderr],',
+    "});",
+    'if (typeof stderr === "number") closeSync(stderr);',
+    'for (const signal of ["SIGHUP", "SIGINT", "SIGTERM"]) {',
+    "  process.on(signal, () => child.kill(signal));",
+    "}",
+    'child.on("exit", (code) => process.exit(code ?? 1));',
+  ].join("\n");
+
+/** Run the public setup command under a real pseudo-terminal in an isolated home. */
+const withTerminalSetup = async (
+  args: readonly string[],
+  assert: (run: TerminalSetupRun) => void | Promise<void>,
+  options?: TerminalSetupOptions,
+): Promise<void> => {
+  const home = await createTestTempDirectory("rea-cli-setup-terminal-");
+  const stderrPath =
+    options?.captureStderr === true ? join(home, "setup.stderr") : undefined;
+  try {
+    await options?.prepare?.(home);
+    const { output, exitCode } = await new Promise<{
+      output: string;
+      exitCode: number;
+    }>((resolvePromise, reject) => {
+      let output = "";
+      const terminal = spawn(
+        process.execPath,
+        options?.redirectStdin === true || options?.captureStderr === true
+          ? [
+              "--input-type=module",
+              "--eval",
+              redirectedStdinLauncher(args, stderrPath),
+            ]
+          : ["scripts/rea.mjs", "setup", ...args],
+        {
+          cwd: process.cwd(),
+          env: {
+            ...isolatedClientEnvironment(),
+            HOME: home,
+            USERPROFILE: home,
+            XDG_CONFIG_HOME: join(home, ".config"),
+            NO_COLOR: "1",
+            TERM: "xterm-256color",
+          },
+          name: "xterm-256color",
+          cols: 400,
+          rows: 60,
+        },
+      );
+      const timeout = setTimeout(() => {
+        terminal.kill();
+        reject(new Error(`Timed out after output:\n${output}`));
+      }, 50_000);
+      terminal.onData((data) => {
+        output += data;
+      });
+      terminal.onExit(({ exitCode }) => {
+        clearTimeout(timeout);
+        resolvePromise({ output, exitCode });
+      });
+    });
+    await assert({
+      output,
+      exitCode,
+      home,
+      stderr:
+        stderrPath === undefined
+          ? undefined
+          : await readFile(stderrPath, "utf8"),
+    });
+  } finally {
+    await rm(home, { recursive: true, force: true });
+  }
+};
 
 interface JourneyStep {
   readonly prompt: string;
