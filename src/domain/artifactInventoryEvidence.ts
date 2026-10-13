@@ -18,7 +18,7 @@ import {
 } from "./artifactIdentity.js";
 import { parseEvidence, type Evidence } from "./evidence.js";
 import { artifactInspectionResultSchema } from "./artifactInspection.js";
-import { ZIP_NON_ENTRY_TAIL_LIMITATION } from "./zipPackageFormat.js";
+import { isZipInventoryScopeLimitation } from "./zipPackageFormat.js";
 
 /** Complete or partially assembled inventory used by comparison workflows. */
 export interface InventorySet {
@@ -227,7 +227,7 @@ const resolveInventoryCoverageStatus = (
 
 const isKnownNonCoverageNotice = (limitation: string): boolean =>
   limitation === "Artifact has no child container entries." ||
-  limitation === ZIP_NON_ENTRY_TAIL_LIMITATION ||
+  isZipInventoryScopeLimitation(limitation) ||
   /^\d+ integrity contradiction\(s\) were recorded; mismatched content is observed-untrusted\.$/u.test(
     limitation,
   );

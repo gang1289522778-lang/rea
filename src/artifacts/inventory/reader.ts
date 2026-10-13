@@ -11,7 +11,7 @@ import type {
 } from "../../domain/artifactGraph.js";
 import {
   isZipPackageFormat,
-  ZIP_NON_ENTRY_TAIL_LIMITATION,
+  ZIP_NON_ENTRY_LIMITATION,
 } from "../../domain/zipPackageFormat.js";
 import type { StableRegularFileDescriptor } from "../../filesystem/RegularFile.js";
 
@@ -54,7 +54,7 @@ export const inventoryAssessment = (
   const limitations: string[] = [];
   if (reader !== undefined) {
     if (isZipPackageFormat(reader.format))
-      limitations.push(ZIP_NON_ENTRY_TAIL_LIMITATION);
+      limitations.push(ZIP_NON_ENTRY_LIMITATION);
   } else if (format === "dmg" || format === "pkg") {
     coverageStatus = "partial";
     limitations.push(
