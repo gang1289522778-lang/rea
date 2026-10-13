@@ -73,6 +73,7 @@ export const readConfigurationFile = async (
 export const readClientConfigurationFiles = async (
   client: SetupClient,
   resources?: ArtifactResourceScope,
+  platform: NodeJS.Platform = process.platform,
 ): Promise<
   Result<readonly ClientConfigurationDocument[], ClientConfigurationFileError>
 > => {
@@ -85,7 +86,12 @@ export const readClientConfigurationFiles = async (
     );
     if (!document.ok) return document;
     if (document.value !== undefined) {
-      const environment = clientRegistrationEnvironment(document.value);
+      const environment = clientRegistrationEnvironment(
+        document.value,
+        {},
+        {},
+        platform,
+      );
       if (!environment.ok)
         return err({
           kind: "malformed",

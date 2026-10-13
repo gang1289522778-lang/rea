@@ -323,6 +323,33 @@ Harness integration, with live DeepSeek API compatibility remaining unverified.
 See the [Harness MCP guide](https://github.com/deepseek-ai/deepseek-harness/blob/639ed015397290b3745d163aafe02ffee4aa3f84/packages/mcp/mcp-client/README.md)
 for its native configuration contract.
 
+## Kimi Code
+
+For Kimi Code, setup registers `rea` in the `mcpServers` table of the
+user-level `~/.kimi-code/mcp.json`, or `$KIMI_CODE_HOME/mcp.json` when that
+variable is nonempty (a nonempty value is used as-is, and an empty value
+selects the default). Setup writes only the user scope: a project's
+`.kimi-code/mcp.json`, and a project-root `.mcp.json`, can override a
+same-name user entry. Kimi Code's built-in `/mcp-config` skill documents
+these three scopes — user-global `mcp.json`, project-root `.mcp.json` as
+the Claude-compatible file located via the nearest `.git`, and
+project-local `.kimi-code/mcp.json` — with later scopes overriding
+earlier ones on name collision. Check those files when the user
+registration is aligned but unavailable in a project. Kimi Code discovers personal skills in
+`~/.agents/skills`, where setup installs the bundled workflow.
+
+A Kimi Code registration is written with
+`"REA_MCP_INPUT_SCHEMA_PROFILE": "compact"` in its `env` object. Moonshot's
+API rejects an entire model request while any single tool's input schema
+exceeds its per-schema size cap
+([#1484](https://github.com/morluto/rea/issues/1484)); against `rea-agents`
+6.4.0 the full profile put five schemas over that cap (largest 61,876 bytes,
+`compare_web_captures`), while the compact profile put none over it (largest
+12,090 bytes). An explicit profile already configured in the entry is
+preserved. Kimi Code loads MCP servers when a session starts: after setup
+changes the registration, restart the client or start a new session, where
+REA's tools appear as `mcp__rea__<tool_name>`.
+
 ## Other client settings
 
 For OpenCode, setup writes the V1 `mcp.rea` entry, which OpenCode V1 and V2

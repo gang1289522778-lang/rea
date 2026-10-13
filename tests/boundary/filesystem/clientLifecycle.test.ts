@@ -70,6 +70,7 @@ describe("client configuration filesystem lifecycle", () => {
       "omp",
       "pi",
       "hermes",
+      "kimi_code",
       "qoder",
       "droid",
       "zcode",

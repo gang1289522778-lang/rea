@@ -674,6 +674,21 @@ const registrationCurrent = (
   !Object.hasOwn(parsed.legacyServers, PRODUCT_IDENTITY.mcpServerKey) &&
   !clientServerListedDisabled(parsed, PRODUCT_IDENTITY.mcpServerKey);
 
+/**
+ * Settings seeded only where a registration does not configure them. The
+ * Moonshot API rejects a whole request while one tool's input schema exceeds
+ * its per-schema cap (https://github.com/morluto/rea/issues/1484), and five
+ * full-profile schemas in rea-agents 6.4.0 exceeded it (largest 61,876 bytes)
+ * while none did under the compact profile (largest 12,090 bytes), so Kimi
+ * Code registrations start compact and keep an explicit caller choice.
+ */
+const clientRegistrationDefaults = (
+  client: SetupClient,
+): Readonly<Record<string, string>> =>
+  client.name === "kimi_code"
+    ? { REA_MCP_INPUT_SCHEMA_PROFILE: "compact" }
+    : {};
+
 const clientConfigurationDesired = (
   client: SetupClient,
   providerEnvironment: SetupProviderEnvironment,
@@ -697,6 +712,7 @@ const clientConfigurationDesired = (
   const environment = clientRegistrationEnvironment(
     parsed,
     providerEnvironment,
+    clientRegistrationDefaults(client),
   );
   if (!environment.ok) throw environment.error;
   const registration = clientRegistrationEntry(

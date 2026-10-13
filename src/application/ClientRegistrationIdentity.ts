@@ -1,6 +1,10 @@
 import { basename, isAbsolute, resolve } from "node:path";
 import { valid } from "semver";
 
+import {
+  environmentKey,
+  environmentKeyIdentity,
+} from "../config/environmentKey.js";
 import { PRODUCT_IDENTITY } from "../identity.js";
 
 /** Package runners whose pinned launcher setup can register. */
@@ -12,10 +16,7 @@ const environmentValue = (
   name: string,
   platform: NodeJS.Platform,
 ): string | undefined => {
-  if (platform !== "win32") return environment[name];
-  const key = Object.keys(environment).find(
-    (candidate) => candidate.toLowerCase() === name,
-  );
+  const key = environmentKey(environment, name, platform);
   return key === undefined ? undefined : environment[key];
 };
 
@@ -42,10 +43,10 @@ export const withoutPackageRunnerIdentity = (
   platform: NodeJS.Platform = process.platform,
 ): NodeJS.ProcessEnv =>
   Object.fromEntries(
-    Object.entries(environment).filter(([key]) =>
-      platform === "win32"
-        ? key.toLowerCase() !== "npm_command"
-        : key !== "npm_command",
+    Object.entries(environment).filter(
+      ([key]) =>
+        environmentKeyIdentity(key, platform) !==
+        environmentKeyIdentity("npm_command", platform),
     ),
   );
 
