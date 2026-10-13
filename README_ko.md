@@ -132,12 +132,12 @@ REA에는 Node.js 22.x(>=22.19), 24.x(>=24.11) 또는 26+와 npm이 필요합니
 
 | 대상                  | REA가 반환하는 내용                                                           | 요구 사항 및 가이드                                                                                                                   |
 | --------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| 네이티브 바이너리     | 의사 코드, 어셈블리, 문자열, 심볼, 호출, 참조                                 | Hopper, Ghidra 또는 IDA; [네이티브 분석](https://rea.tools/ko/guides/native/)                                                         |
+| 네이티브 바이너리     | 의사 코드, 어셈블리, 문자열, 심볼, 호출, 참조                                 | Hopper, Ghidra 또는 IDA; [네이티브 분석](docs/native-investigation.md)                                                         |
 | 오프라인 ELF 레이아웃 | 섹션, 세그먼트, 원본 심볼/재배치 정보, 정적 분석으로 얻은 보안 완화 기법 후보 | Linux x64에서 호출자가 제공하는 pwntools; [바이너리 진단](docs/binary-diagnostics.md)                                                 |
 | EVM 바이트코드        | 디스패치 선택자, 바이트 오프셋, 추론한 인자와 상태 변경 가능 여부             | Linux x64의 로컬 원시 바이트/16진수 입력 파일; [오프라인 EVM 가이드](docs/evm-bytecode.md)                                            |
 | 기록된 Linux 크래시   | 원시 note 레코드, 기록된 모든 스레드의 레지스터/시그널, 선택적 매핑 후보      | Linux x64에서 호출자가 제공하는 pwntools; GDB/pwndbg는 선택 사항; [기록된 크래시](docs/recorded-crashes.md)                           |
-| JavaScript / Electron | 모듈, 임포트, 소스 맵, 라우트, IPC, 네이티브 애드온 관계                      | Node.js와 npm; [애플리케이션 분석](https://rea.tools/ko/guides/javascript/)                                                           |
-| 웹사이트              | 페이지 구조, 스크립트, 네트워크 관찰 결과, 요청한 스크린샷                    | Chrome 계열 브라우저; [브라우저 분석](https://rea.tools/ko/guides/browser/)                                                           |
+| JavaScript / Electron | 모듈, 임포트, 소스 맵, 라우트, IPC, 네이티브 애드온 관계                      | Node.js와 npm; [애플리케이션 분석](docs/javascript-artifact-reconstruction.md)                                                           |
+| 웹사이트              | 페이지 구조, 스크립트, 네트워크 관찰 결과, 요청한 스크린샷                    | Chrome 계열 브라우저; [브라우저 분석](docs/browser-observation.md)                                                           |
 | 저장된 네트워크 캡처  | 요청, 응답, 접근 가능한 페이로드, 소스 위치                                   | HAR; mitmproxy 네이티브 캡처에는 Linux의 mitmdump; [캡처 가이드](docs/web-network-captures.md)                                        |
 | 패킷 캡처             | 엔드포인트, DNS, TLS SNI, 프로토콜 분포, HTTP 요청                            | 호출자 제공 tshark 및 capinfos; [pcap 가이드](docs/pcap-analysis.md)                                                                  |
 | .NET 어셈블리         | 메타데이터, CIL 명령, 선언된 네이티브 의존성, 빌드 비교                       | 정적 검사; [관리 코드 가이드](docs/managed-code-analysis.md)                                                                          |
