@@ -20,6 +20,10 @@
         { "type": "generic", "path": "docs/installation.md" },
         {
           "type": "generic",
+          "path": ".agents/skills/reverse-engineer-anything/SKILL.md"
+        },
+        {
+          "type": "generic",
           "path": "src/generatedPackageMetadata.ts"
         },
         {
