@@ -42,6 +42,10 @@ export async function verifyPackagePack({ root, workspace }) {
     throw new Error(
       "package included authored skill sources instead of only the generated bundle",
     );
+  if (packedFiles.some((path) => path.startsWith("package/src/")))
+    throw new Error(
+      "Packaged runtime must not masquerade as a source checkout",
+    );
   if (packedFiles.some((path) => path.startsWith("package/.cache/")))
     throw new Error("package included development cache or test metadata");
   const skill = (
@@ -59,6 +63,43 @@ export async function verifyPackagePack({ root, workspace }) {
   )
     throw new Error(
       "packaged skill metadata did not match the catalog shipped in the package",
+    );
+  for (const path of [
+    ".claude-plugin/plugin.json",
+    ".codex-plugin/plugin.json",
+  ]) {
+    const manifest = JSON.parse(
+      (await exec("tar", ["-xOf", tarball, `package/${path}`])).stdout,
+    );
+    if (
+      manifest.version !== packedManifest.version ||
+      manifest.skills !== "./skills" ||
+      manifest.mcpServers?.rea?.command !== "node" ||
+      (path.startsWith(".codex") && manifest.mcpServers?.rea?.cwd !== ".") ||
+      JSON.stringify(manifest.mcpServers?.rea?.args) !==
+        JSON.stringify([
+          `${path.startsWith(".claude") ? "${CLAUDE_PLUGIN_ROOT}/" : "./"}scripts/plugin-mcp-launcher.mjs`,
+          `${packedManifest.name}@${packedManifest.version}`,
+        ])
+    )
+      throw new Error(
+        `Packaged plugin ${path} does not match the exact runtime and canonical skill release`,
+      );
+  }
+  for (const path of [
+    "scripts/plugin-mcp-launcher.mjs",
+    "scripts/lib/packageRunnerCommand.mjs",
+  ])
+    if (!packedFiles.includes(`package/${path}`))
+      throw new Error(
+        `Packaged plugin launcher dependency is missing: ${path}`,
+      );
+  if (
+    skill.includes(`${packedManifest.name}@latest`) ||
+    !skill.includes(`${packedManifest.name}@${packedManifest.version}`)
+  )
+    throw new Error(
+      "Packaged plugin skill recovery is not pinned to the shipped runtime",
     );
   if (
     packedFiles.some(

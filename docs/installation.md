@@ -785,6 +785,79 @@ read-only operations, digest identity, and runtime cleanup. The separate
 ordinary user. It requires the built Windows native bundle and an existing
 Ghidra/JDK installation; neither is inferred from startup alone.
 
+## Agent plugins and marketplaces
+
+REA's npm package is the shared Claude Code and Codex plugin artifact. It
+contains `.claude-plugin/plugin.json`, `.codex-plugin/plugin.json`, and the
+canonical generated `skills/` tree. Both manifests select `./skills` and run a plain Node bootstrap pinned to
+that exact package version. The client must have a supported standalone `node`
+on its PATH. Claude expands its documented `CLAUDE_PLUGIN_ROOT` in the script
+argument; Codex resolves `cwd: "."` from the installed plugin root before
+launching the relative script. The shared bootstrap preserves the pinned
+package-runner arguments and stdio, handles Windows npm shims, and uses an owned
+empty working directory so an unbuilt local checkout cannot shadow the exact
+registry release. The existing release skill
+generator also pins CLI recovery commands to the same version.
+
+The repository's single-plugin marketplaces are declared in
+`.claude-plugin/marketplace.json` and `.agents/plugins/marketplace.json`.
+Both select an exact `rea-agents` npm version instead of mutable source-checkout
+contents. Release Please updates their selectors alongside the plugin manifests.
+No plugin-only publication or generated skill files committed to Git are needed.
+
+This distribution becomes installable after the first qualified npm release
+containing these plugin manifests. Earlier published packages are not changed
+by this source proposal. For local source development, generate the existing
+packaged skill before loading the repository as a plugin; the authored
+`.agents/skills/` tree is not the plugin's shipped skill layout.
+
+In Claude Code:
+
+```text
+/plugin marketplace add morluto/rea
+/plugin install rea@rea
+```
+
+In Codex, add the marketplace and then install REA from the plugin list:
+
+```bash
+codex plugin marketplace add morluto/rea
+```
+
+Each release updates both manifest versions and their pinned server version
+together, which is when installed copies refresh the bundled skill and move to
+the new server. A plugin does not run `rea setup`, so provider
+configuration still follows the sections above. Use the plugin or a
+`rea setup` registration for a client, not both, to avoid two `rea` servers.
+
+`rea doctor` does not see plugin-owned state. Its client and skill checks read
+only the registrations and skill locations that `rea setup` manages, so for a
+plugin-only install `rea doctor --client <id>` and `rea doctor --skill` report
+`missing` and recommend `rea setup`. Do not follow that remediation. Check the
+plugin with the client instead (`claude plugin list` and `/mcp` in Claude
+Code, `codex plugin list` in Codex).
+
+For analysis engines, ask the connected server: have the agent call
+`binary_session` and read `result.tool_availability`, which reports what the
+server the plugin started can use, with reasons and remediation. See
+[MCP contracts](mcp-contracts.md).
+
+A plugin does not put `rea` on your `PATH`. To check an engine from a
+terminal, use the package runner at the version the plugin pins:
+
+<!-- x-release-please-start-version -->
+
+```bash
+npx -y rea-agents@6.4.0 doctor --provider ghidra --json
+```
+
+<!-- x-release-please-end -->
+
+If your installed plugin is older, use the version in its manifest instead.
+That report describes the terminal's environment, not the plugin server's.
+The server inherits the client's environment, so a setting such as
+`GHIDRA_INSTALL_DIR` that exists only in your terminal does not reach it.
+
 ## MCP Registry
 
 REA is published in the official MCP Registry as `io.github.morluto/rea`. Registry

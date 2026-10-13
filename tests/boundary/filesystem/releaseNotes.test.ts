@@ -6,7 +6,7 @@ import {
   readFile,
   writeFile,
 } from "node:fs/promises";
-import { delimiter, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { z } from "zod";
@@ -43,6 +43,30 @@ interface ReleaseNotesSeed {
 let seed: ReleaseNotesSeed | undefined;
 let seedWorkspaceRoot: string | undefined;
 
+const pluginManifests = [
+  ".claude-plugin/plugin.json",
+  ".codex-plugin/plugin.json",
+] as const;
+
+const pluginMarketplaces = [
+  ".claude-plugin/marketplace.json",
+  ".agents/plugins/marketplace.json",
+] as const;
+const pluginMarketplace = (version: string, packageName = "rea-agents") => ({
+  plugins: [
+    { name: "rea", source: { source: "npm", package: packageName, version } },
+  ],
+});
+
+const pluginManifest = (
+  version: string,
+  { skills = ["./skill"], packageName = "rea-agents" } = {},
+) => ({
+  version,
+  skills,
+  mcpServers: { rea: { args: ["-y", `${packageName}@${version}`, "mcp"] } },
+});
+
 beforeAll(async () => {
   const workspace = await createTestWorkspace("rea-release-notes-seed-");
   seedWorkspaceRoot = workspace.root;
@@ -58,6 +82,20 @@ beforeAll(async () => {
     join(directory, ".release-please-manifest.json"),
     JSON.stringify({ ".": "6.3.0" }),
   );
+  for (const path of pluginManifests) {
+    await mkdir(join(directory, dirname(path)), { recursive: true });
+    await writeFile(
+      join(directory, path),
+      JSON.stringify(pluginManifest("6.3.0")),
+    );
+  }
+  for (const path of pluginMarketplaces) {
+    await mkdir(join(directory, dirname(path)), { recursive: true });
+    await writeFile(
+      join(directory, path),
+      JSON.stringify(pluginMarketplace("6.3.0")),
+    );
+  }
   await git(directory, ["add", "."]);
   await git(directory, ["commit", "-m", "chore: baseline"]);
   const base = await git(directory, ["rev-parse", "HEAD"]);
@@ -368,9 +406,25 @@ it("rejects lost grouped credits, fabricated references, bots, and stale PR bodi
 
 it("binds publication to complete recorded history and the reviewed base", async () => {
   const f = await fixture();
-  await git(f.directory, ["add", "CHANGELOG.md"]);
+  for (const path of pluginManifests)
+    await writeFile(
+      join(f.directory, path),
+      JSON.stringify(pluginManifest("6.4.0")),
+    );
+  for (const path of pluginMarketplaces)
+    await writeFile(
+      join(f.directory, path),
+      JSON.stringify(pluginMarketplace("6.4.0")),
+    );
+  await git(f.directory, [
+    "add",
+    "CHANGELOG.md",
+    ...pluginManifests,
+    ...pluginMarketplaces,
+  ]);
   await git(f.directory, ["commit", "-m", "chore: release notes"]);
   const source = await git(f.directory, ["rev-parse", "HEAD"]);
+  // Release PRs bump the plugin manifest version and pinned launch only.
   await f.invoke(["check", "--manifest", f.manifest, "--source", source]);
   await writeFile(join(f.directory, "product.txt"), "later product change");
   await git(f.directory, ["add", "product.txt"]);
@@ -390,6 +444,35 @@ it("binds publication to complete recorded history and the reviewed base", async
     stderr: expect.stringContaining("complete local Git history"),
   });
 });
+
+it.each(
+  pluginManifests.flatMap((path) => [
+    { path, change: "the skill path", edit: { skills: ["./another-skill"] } },
+    {
+      path,
+      change: "the launched package",
+      edit: { packageName: "another-package" },
+    },
+  ]),
+)(
+  "treats a release that changes $change in $path as a product change",
+  async ({ path, edit }) => {
+    const f = await fixture();
+    await writeFile(
+      join(f.directory, path),
+      JSON.stringify(pluginManifest("6.4.0", edit)),
+    );
+    await git(f.directory, ["add", "CHANGELOG.md", path]);
+    await git(f.directory, ["commit", "-m", "chore: release notes"]);
+    await expect(
+      f.invoke(["check", "--manifest", f.manifest, "--source", "HEAD"]),
+    ).rejects.toMatchObject({
+      stderr: expect.stringContaining(
+        `Product changed after notes target; regenerate inventory: ${path}`,
+      ),
+    });
+  },
+);
 
 it("checks the live merged PR and exact Git snapshot before either publication route", async () => {
   const f = await fixture();
@@ -536,3 +619,23 @@ it("fails closed on partial GitHub errors and non-advancing pagination without s
   });
   await expect(access(output)).rejects.toMatchObject({ code: "ENOENT" });
 });
+
+it.each(pluginMarketplaces)(
+  "treats a marketplace package change in %s as product behavior",
+  async (path) => {
+    const f = await fixture();
+    await writeFile(
+      join(f.directory, path),
+      JSON.stringify(pluginMarketplace("6.4.0", "another-package")),
+    );
+    await git(f.directory, ["add", "CHANGELOG.md", path]);
+    await git(f.directory, ["commit", "-m", "chore: release notes"]);
+    await expect(
+      f.invoke(["check", "--manifest", f.manifest, "--source", "HEAD"]),
+    ).rejects.toMatchObject({
+      stderr: expect.stringContaining(
+        `Product changed after notes target; regenerate inventory: ${path}`,
+      ),
+    });
+  },
+);

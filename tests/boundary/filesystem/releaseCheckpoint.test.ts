@@ -1,5 +1,5 @@
 import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, expect, it } from "vitest";
 import { z } from "zod";
@@ -19,6 +19,16 @@ const verifier = fileURLToPath(
   new URL("../../../scripts/verify-release-checkpoint.mjs", import.meta.url),
 );
 
+const pluginManifestPaths = [
+  ".claude-plugin/plugin.json",
+  ".codex-plugin/plugin.json",
+] as const;
+
+const pluginManifest = (version: string, launch = `rea-agents@${version}`) => ({
+  version,
+  mcpServers: { rea: { args: ["-y", launch, "mcp"] } },
+});
+
 async function metadata(
   directory: string,
   version: string,
@@ -27,7 +37,12 @@ async function metadata(
 ) {
   await mkdir(join(directory, "docs"), { recursive: true });
   await mkdir(join(directory, "src"), { recursive: true });
+  for (const path of pluginManifestPaths)
+    await mkdir(join(directory, dirname(path)), { recursive: true });
   const files = {
+    ...Object.fromEntries(
+      pluginManifestPaths.map((path) => [path, pluginManifest(version)]),
+    ),
     "package.json": { name: "rea-agents", version },
     "package-lock.json": { version, packages: { "": { version } } },
     ".release-please-manifest.json": { ".": version },
@@ -562,6 +577,40 @@ it.each([
     stderr: expect.stringContaining(
       "declares 5.1.0; release branch requires 6.0.0",
     ),
+  });
+});
+
+it.each(
+  pluginManifestPaths.flatMap((path) => [
+    {
+      path,
+      stale: "version",
+      manifest: pluginManifest("5.1.0", "rea-agents@6.0.0"),
+      failure: "declares 5.1.0; release branch requires 6.0.0",
+    },
+    {
+      path,
+      stale: "server launch",
+      manifest: pluginManifest("6.0.0", "rea-agents@5.1.0"),
+      failure:
+        "launches rea-agents@5.1.0; release branch requires rea-agents@6.0.0",
+    },
+    {
+      path,
+      stale: "server launch without the package name",
+      manifest: pluginManifest("6.0.0", "6.0.0"),
+      failure: "launches 6.0.0; release branch requires rea-agents@6.0.0",
+    },
+  ]),
+)("rejects a plugin $stale in $path", async ({ path, manifest, failure }) => {
+  const f = await fixture();
+  await candidate(f, "6.0.0");
+  await writeFile(join(f.directory, path), JSON.stringify(manifest));
+  await git(f.directory, ["add", "."]);
+  await git(f.directory, ["commit", "-m", "chore: stale plugin manifest"]);
+  await expect(verify(f)).rejects.toMatchObject({
+    code: 1,
+    stderr: expect.stringContaining(failure),
   });
 });
 
