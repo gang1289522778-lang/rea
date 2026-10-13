@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { snapshotEnvironment } from "../process/snapshotEnvironment.js";
 import type {
   AnalysisClient,
@@ -208,6 +209,7 @@ export class GhidraProvider implements AnalysisProviderCandidate {
       options?.signal,
       this.config.ghidraLanguageOverride,
       this.config.ghidraDisabledAnalyzers,
+      this.config.ghidraExistingProject !== undefined,
     );
     if (!resolved.ok || resolved.value.profile === null) return resolved;
     const override = this.config.ghidraLanguageOverride;
@@ -244,12 +246,28 @@ export class GhidraProvider implements AnalysisProviderCandidate {
       return err(new AnalysisCancelledError("open_binary"));
     const seeds = await resolveGhidraAnalysisSeeds(this.config.ghidraSeedFile);
     if (!seeds.ok) return seeds;
-    if (extensions.value.length === 0 && seeds.value === undefined)
+    const existingProject = this.config.ghidraExistingProject;
+    if (
+      extensions.value.length === 0 &&
+      seeds.value === undefined &&
+      existingProject === undefined
+    )
       return resolved;
     return ok({
       ...resolved.value,
       profile: createAnalysisProfile(resolved.value.profile.provider, {
         ...resolved.value.profile.parameters,
+        // Saved project analysis is not committed by the executable digest.
+        // Bind snapshots to this resolution's owned copy; cross-session replay
+        // stays unavailable until the selected program's saved state is hashed.
+        ...(existingProject === undefined
+          ? {}
+          : {
+              existing_project: {
+                program_name: existingProject.programName,
+                session_id: randomUUID(),
+              },
+            }),
         ...(extensions.value.length === 0
           ? {}
           : { analysis_extensions: jsonValueSchema.parse(extensions.value) }),

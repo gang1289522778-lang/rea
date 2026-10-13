@@ -61,6 +61,54 @@ export const parseConfig = (
         ],
       }),
     );
+  // An existing Ghidra project is opened with -process and already carries its
+  // analysis, so import-time selections cannot be combined with it.
+  const existingProjectPath = env.REA_GHIDRA_EXISTING_PROJECT;
+  const existingProgramName = env.REA_GHIDRA_EXISTING_PROGRAM;
+  if (
+    (existingProjectPath === undefined) !==
+    (existingProgramName === undefined)
+  )
+    return err(
+      new ConfigurationError("Invalid REA environment configuration", {
+        settings: [
+          {
+            setting:
+              existingProjectPath === undefined
+                ? "REA_GHIDRA_EXISTING_PROJECT"
+                : "REA_GHIDRA_EXISTING_PROGRAM",
+            constraint:
+              "REA_GHIDRA_EXISTING_PROJECT and REA_GHIDRA_EXISTING_PROGRAM must be set together",
+          },
+        ],
+      }),
+    );
+  if (existingProjectPath !== undefined) {
+    const importTimeSettings: readonly string[] = [
+      ...(env.REA_GHIDRA_LANGUAGE_ID === undefined
+        ? []
+        : ["REA_GHIDRA_LANGUAGE_ID"]),
+      ...(env.REA_GHIDRA_COMPILER_SPEC_ID === undefined
+        ? []
+        : ["REA_GHIDRA_COMPILER_SPEC_ID"]),
+      ...(env.REA_GHIDRA_SEED_FILE === undefined
+        ? []
+        : ["REA_GHIDRA_SEED_FILE"]),
+      ...(env.REA_GHIDRA_DISABLED_ANALYZERS === undefined
+        ? []
+        : ["REA_GHIDRA_DISABLED_ANALYZERS"]),
+    ];
+    if (importTimeSettings.length > 0)
+      return err(
+        new ConfigurationError("Invalid REA environment configuration", {
+          settings: importTimeSettings.map((setting) => ({
+            setting,
+            constraint:
+              "cannot be combined with REA_GHIDRA_EXISTING_PROJECT, which opens without import or analysis",
+          })),
+        }),
+      );
+  }
   return ok({
     ...(env.REA_MCP_MAX_RESPONSE_BYTES === undefined
       ? {}
@@ -88,6 +136,14 @@ export const parseConfig = (
     ...(env.REA_GHIDRA_SEED_FILE === undefined
       ? {}
       : { ghidraSeedFile: env.REA_GHIDRA_SEED_FILE }),
+    ...(existingProjectPath === undefined || existingProgramName === undefined
+      ? {}
+      : {
+          ghidraExistingProject: {
+            projectPath: existingProjectPath,
+            programName: existingProgramName,
+          },
+        }),
     ...(env.REA_GHIDRA_DISABLED_ANALYZERS === undefined
       ? {}
       : { ghidraDisabledAnalyzers: env.REA_GHIDRA_DISABLED_ANALYZERS }),

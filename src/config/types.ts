@@ -3,6 +3,7 @@ import type { ReferenceSourcePolicy } from "../domain/referenceSourcePolicy.js";
 import type { AnalysisProviderSelector } from "../contracts/providerSelection.js";
 
 import type { GhidraLanguageOverride } from "./ghidraLanguageOverride.js";
+import type { GhidraExistingProject } from "./ghidraExistingProject.js";
 import type { McpInputSchemaProfile } from "./mcpInputSchemaProfile.js";
 
 export interface AppConfig {
@@ -16,6 +17,7 @@ export interface AppConfig {
   readonly ghidraLanguageOverride?: GhidraLanguageOverride;
   readonly ghidraDisabledAnalyzers?: readonly string[];
   readonly ghidraSeedFile?: string;
+  readonly ghidraExistingProject?: GhidraExistingProject;
   readonly ghidraNativeAotJar?: string;
   readonly ilspyCmdPath: string | undefined;
   readonly hopperLauncherPath: string;

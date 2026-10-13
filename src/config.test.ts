@@ -290,3 +290,104 @@ describe("configuration failure diagnostics", () => {
       });
   });
 });
+
+describe("Ghidra existing project configuration", () => {
+  it("binds a paired existing Ghidra project and program", () => {
+    const result = parseConfig({
+      REA_GHIDRA_EXISTING_PROJECT: "/opt/projects/rea-project",
+      REA_GHIDRA_EXISTING_PROGRAM: "target-abcd.dll",
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok)
+      expect(result.value.ghidraExistingProject).toEqual({
+        projectPath: "/opt/projects/rea-project",
+        programName: "target-abcd.dll",
+      });
+  });
+
+  it.each<[string, Record<string, string>]>([
+    [
+      "REA_GHIDRA_EXISTING_PROGRAM",
+      { REA_GHIDRA_EXISTING_PROJECT: "/opt/projects/rea-project" },
+    ],
+    [
+      "REA_GHIDRA_EXISTING_PROJECT",
+      { REA_GHIDRA_EXISTING_PROGRAM: "target-abcd.dll" },
+    ],
+  ])("requires the paired %s setting", (setting, environment) => {
+    const result = parseConfig(environment);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(projectAnalysisError(result.error)).toMatchObject({
+      code: "configuration_invalid",
+      details: {
+        settings: [
+          {
+            setting,
+            constraint:
+              "REA_GHIDRA_EXISTING_PROJECT and REA_GHIDRA_EXISTING_PROGRAM must be set together",
+          },
+        ],
+      },
+    });
+  });
+
+  it("names the absolute-path constraint of REA_GHIDRA_EXISTING_PROJECT", () => {
+    const result = parseConfig({
+      REA_GHIDRA_EXISTING_PROJECT: "project",
+      REA_GHIDRA_EXISTING_PROGRAM: "target-abcd.dll",
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(projectAnalysisError(result.error)).toMatchObject({
+      details: {
+        settings: [
+          {
+            setting: "REA_GHIDRA_EXISTING_PROJECT",
+            constraint: "REA_GHIDRA_EXISTING_PROJECT must be absolute",
+          },
+        ],
+      },
+    });
+  });
+
+  it("rejects surrounding whitespace in REA_GHIDRA_EXISTING_PROGRAM", () => {
+    const result = parseConfig({
+      REA_GHIDRA_EXISTING_PROJECT: "/opt/projects/rea-project",
+      REA_GHIDRA_EXISTING_PROGRAM: " target-abcd.dll ",
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(projectAnalysisError(result.error)).toMatchObject({
+      details: {
+        settings: [
+          {
+            setting: "REA_GHIDRA_EXISTING_PROGRAM",
+            constraint: expect.any(String),
+          },
+        ],
+      },
+    });
+  });
+
+  it.each<[string, Record<string, string>]>([
+    ["REA_GHIDRA_LANGUAGE_ID", { REA_GHIDRA_LANGUAGE_ID: "x86:LE:64:default" }],
+    ["REA_GHIDRA_SEED_FILE", { REA_GHIDRA_SEED_FILE: "/opt/seeds.json" }],
+    [
+      "REA_GHIDRA_DISABLED_ANALYZERS",
+      { REA_GHIDRA_DISABLED_ANALYZERS: "Stack" },
+    ],
+  ])("rejects %s combined with an existing project", (setting, environment) => {
+    const result = parseConfig({
+      REA_GHIDRA_EXISTING_PROJECT: "/opt/projects/rea-project",
+      REA_GHIDRA_EXISTING_PROGRAM: "target-abcd.dll",
+      ...environment,
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(projectAnalysisError(result.error)).toMatchObject({
+      code: "configuration_invalid",
+      details: { settings: [{ setting, constraint: expect.any(String) }] },
+    });
+  });
+});

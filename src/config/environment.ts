@@ -10,6 +10,10 @@ import {
 } from "./ghidraLanguageOverride.js";
 import { ghidraDisabledAnalyzersSchema } from "./ghidraDisabledAnalyzers.js";
 import {
+  ghidraExistingProgramNameSchema,
+  ghidraExistingProjectPathSchema,
+} from "./ghidraExistingProject.js";
+import {
   DEFAULT_GHIDRA_STARTUP_TIMEOUT_MS,
   DEFAULT_HOPPER_STARTUP_TIMEOUT_MS,
   providerStartupTimeoutSchema,
@@ -55,6 +59,8 @@ const environmentSchema = z.object({
     .min(1)
     .refine(isAbsolute, "REA_GHIDRA_SEED_FILE must be absolute")
     .optional(),
+  REA_GHIDRA_EXISTING_PROJECT: ghidraExistingProjectPathSchema.optional(),
+  REA_GHIDRA_EXISTING_PROGRAM: ghidraExistingProgramNameSchema.optional(),
   REA_ILSPY_CMD_PATH: z
     .string()
     .min(1)

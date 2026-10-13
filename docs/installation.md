@@ -692,6 +692,50 @@ that the analyzer was disabled. For Windows PE resource analysis, the exact name
 is `WindowsResourceReference`. Disabling an analyzer skips the facts it would
 have produced.
 
+### Opening a pre-imported Ghidra project
+
+Saved project analysis can differ for identical executable bytes. This mode
+binds each resolved session to its own snapshot identity, so exported analysis
+snapshots cannot be reused by a later session, even with the same project.
+Repeated queries within the owned project copy can still use the session cache.
+
+REA imports every target into a temporary project and runs default
+auto-analysis inside the provider startup deadline. For a target whose import
+and analysis exceed that deadline, import it once outside REA and open the
+result instead:
+
+```bash
+export REA_GHIDRA_EXISTING_PROJECT=/absolute/path/to/project
+export REA_GHIDRA_EXISTING_PROGRAM=target-abcd1234.dll
+```
+
+`REA_GHIDRA_EXISTING_PROJECT` names a directory holding the project as
+`rea-project.grez` or `rea-project.rep`; `REA_GHIDRA_EXISTING_PROGRAM` names the
+imported program selected with `-process`. Both must be set together and cannot
+be combined with `REA_GHIDRA_LANGUAGE_ID`, `REA_GHIDRA_COMPILER_SPEC_ID`,
+`REA_GHIDRA_SEED_FILE`, or `REA_GHIDRA_DISABLED_ANALYZERS`, which apply only to
+a fresh import.
+
+REA copies the project into its own runtime and opens the copy with
+`-process -noanalysis -readOnly`: the caller's directory is never written, the
+target's executable bytes are unchanged, and auto-analysis is not repeated. The
+analysis profile records `import_mode: "existing-project-copy"`. The bridge
+verifies the program's executable SHA-256 against the admitted target, so a
+stale or mismatched project is rejected instead of analyzed. Existing-project
+opens are unavailable on the Windows launch path and for DOS, raw-binary, and
+PSP targets.
+
+To produce the project, import the target with Ghidra's own headless analyzer
+using the fixed project name `rea-project`:
+
+```bash
+"$GHIDRA_INSTALL_DIR/support/analyzeHeadless" \
+  /absolute/path/to/project rea-project -import /absolute/path/to/target
+```
+
+The imported program is named after the target file (for example
+`target-abcd1234.dll`), which is the value for `REA_GHIDRA_EXISTING_PROGRAM`.
+
 ### Ghidra heap and CPU controls
 
 Set resource controls in the environment that launches the CLI or MCP server,
