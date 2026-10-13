@@ -1,6 +1,7 @@
 import * as t from "@babel/types";
 import {
   semanticStaticPropertyKey,
+  runtimeFunctionParameters,
   unwrapJavaScriptExpression,
 } from "./javascriptAstValues.js";
 import { javascriptBootstrapAt } from "./javascriptBootstrap.js";
@@ -363,7 +364,7 @@ export class JavaScriptSymbolicBindings {
     invocationNode?: t.Node,
   ): SymbolicEnvironment {
     const values = new Map<string, SymbolicValue>();
-    fn.node.params.forEach((param, index) => {
+    runtimeFunctionParameters(fn.node).forEach((param, index) => {
       const target = t.isRestElement(param) ? param.argument : param;
       if (!t.isIdentifier(target)) return;
       const binding = resolveSemanticBindingState(
@@ -842,9 +843,7 @@ export class JavaScriptSymbolicBindings {
           ? {}
           : { scopeId: this.state.scopeByNode.get(factory)!.scopeId }),
       };
-      const first = factory.params[0];
-      const second = factory.params[1];
-      const third = factory.params[2];
+      const [first, second, third] = runtimeFunctionParameters(factory);
       const binding = (n: t.Node | undefined) =>
         t.isIdentifier(n)
           ? resolveSemanticBindingState(this.state, n, n.name)?.bindingId
